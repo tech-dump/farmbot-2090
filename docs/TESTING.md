@@ -16,6 +16,7 @@ not claimed as passing.
 | Runtime console | Headless Chrome, after start and 7.5 s of movement | 0 errors, 0 warnings |
 | Scene renders | Headless Chrome screenshots at spawn, after 3 s and 7.5 s of forward movement | Pass, three distinct frames captured |
 | Movement updates view | Held W via DevTools protocol | Pass, camera advanced toward the facility |
+| Production preview | `npm run preview` at `localhost:4173`, headless Chrome | Pass, WebGL 2 context, scene rendered, 0 console errors |
 | WebGL fallback | In-app preview browser with WebGL disabled | Fallback screen shown instead of a blank page |
 
 ### Environment note
