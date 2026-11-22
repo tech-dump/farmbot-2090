@@ -372,6 +372,24 @@ body.pointer-locked .crosshair {
   line-height: 1.65;
 }
 
+.fatal-screen .fatal-hint {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(182, 240, 122, 0.18);
+  font-size: 12.5px;
+}
+
+.fatal-url {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--accent);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 .hint {
   position: fixed;
   top: 26px;

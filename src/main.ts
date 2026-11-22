@@ -18,6 +18,14 @@ try {
         settings, update your graphics driver, or try a current desktop version
         of Chrome, Edge, Firefox or Safari.
       </p>
+      <p class="fatal-hint">
+        Embedded browser previews (such as the one inside a code editor or
+        agent app) often disable WebGL. Open this address in a normal browser
+        tab instead:
+        <span class="fatal-url" data-current-url></span>
+      </p>
     </div>
   `;
+  const urlLabel = root.querySelector<HTMLElement>('[data-current-url]');
+  if (urlLabel) urlLabel.textContent = window.location.href;
 }

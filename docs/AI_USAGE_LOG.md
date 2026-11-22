@@ -47,21 +47,21 @@ Files substantially written by AI:
 
 | File | Lines |
 | --- | --- |
-| `src/main.ts` | 23 |
-| `src/style.css` | 423 |
+| `src/main.ts` | 31 |
+| `src/style.css` | 441 |
 | `src/core/game.ts` | 165 |
 | `src/core/input.ts` | 102 |
 | `src/player/player.ts` | 178 |
 | `src/world/world.ts` | 577 |
 | `src/ui/hud.ts` | 146 |
-| **Total code** | **1,614** |
+| **Total code** | **1,640** |
 
 Configuration, documentation and licence files (also AI-drafted): about 600
 lines, tracked separately from game code.
 
 Owner-authored code at this point: 0 lines.
 
-AI share of the current codebase: 100% (1,614 of 1,614 lines). This is
+AI share of the current codebase: 100% (1,640 of 1,640 lines). This is
 expected at the foundation milestone but it is a large block of the AI
 budget.
 
@@ -69,7 +69,7 @@ Conservative outlook: to keep the overall AI share below the 20% internal
 target, the owner should personally write the large majority of the
 remaining systems. For example, if the owner writes about 6,500 lines of
 farming, restoration, mission, save and polish code, the AI share of an
-approximately 8,100-line project would be roughly 20%. If the AI continues
+approximately 8,200-line project would be roughly 20%. If the AI continues
 to write most systems, the project will exceed the internal target and may
 approach the official limit.
 
