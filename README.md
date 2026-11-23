@@ -126,11 +126,7 @@ npm run preview
 - [docs/TESTING.md](docs/TESTING.md) - test results and known limitations
 - [docs/AI_USAGE_LOG.md](docs/AI_USAGE_LOG.md) - AI assistance and estimates
 
-## Game description (owner-written)
 
-> OWNER TODO: Write the final itch.io game description here yourself.
-> This space is intentionally left blank. The final description must not be
-> drafted or rewritten by an AI assistant.
 
 ## Licence
 
