@@ -14,6 +14,7 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import "@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent";
 import { Input } from "./input";
+import { MusicPlayer } from "../audio/music";
 import { MINUTES_PER_SECOND, START_HOUR } from "./constants";
 import { clamp, lerp, smoothstep } from "./math";
 import { Player, SPAWN } from "../player/player";
@@ -117,6 +118,8 @@ interface TestApi {
   cinematic: () => Record<string, unknown> | null;
   skipCinematic: () => void;
   playIntro: () => void;
+  music: () => Record<string, unknown>;
+  toggleMusicMute: () => boolean;
 }
 
 export class Game {
@@ -149,6 +152,7 @@ export class Game {
   private readonly sunDiscMaterial: StandardMaterial;
   private readonly glowMaterial: StandardMaterial;
   private readonly testMode: boolean;
+  private readonly music = new MusicPlayer();
   private readonly discovered = new Set<string>(["farm", "village", "service"]);
 
   private campaign: CampaignState = createCampaign("heroic", "normal");
@@ -373,6 +377,12 @@ export class Game {
     this.hud.onContinue = () => this.continueFromSave();
     this.hud.onResume = () => this.resume();
     this.hud.onMissions = () => this.openBoard();
+    this.hud.onMusicToggle = () => {
+      const muted = this.music.toggleMuted();
+      this.hud.setMusicOn(!muted);
+      this.hud.setPauseNote(muted ? "Music muted. Toggle it back on any time." : "Music playing. Esc releases the mouse.");
+    };
+    this.hud.setMusicOn(!this.music.isMuted());
     this.hud.onDifficultyChange = (difficulty) => this.changeDifficulty(difficulty);
     this.hud.onDialogueChoice = (index) => this.chooseDialogue(index);
 
@@ -513,6 +523,7 @@ export class Game {
     this.hud.setObjective("Open the mission board with J and accept a contract.");
     this.saveProgress();
     this.hud.setContinueVisible(true);
+    this.music.start();
     this.input.requestLock();
     const moodDef = moodOf(mood);
     this.hud.toast(`${moodDef.name} · ${moodDef.briefing[0]}`, 7000);
@@ -579,6 +590,7 @@ export class Game {
       this.hud.setObjective("Press J to browse the mission board.");
     }
     this.updateEnvironment();
+    this.music.start();
     this.input.requestLock();
     this.hud.toast(`Campaign resumed · saved ${new Date(save.savedAt).toLocaleString()}`);
   }
@@ -1576,6 +1588,12 @@ export class Game {
       },
       skipCinematic: () => this.endCinematic(true),
       playIntro: () => this.playIntro(),
+      music: () => ({ ...this.music.state() }),
+      toggleMusicMute: () => {
+        const muted = this.music.toggleMuted();
+        this.hud.setMusicOn(!muted);
+        return muted;
+      },
     };
     (window as unknown as { __farmbot: TestApi }).__farmbot = api;
     (window as unknown as { __farmbotScene: Scene }).__farmbotScene = this.scene;

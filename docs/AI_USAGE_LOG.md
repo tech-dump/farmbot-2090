@@ -306,3 +306,78 @@ owner should take ownership of the story, dialogue and character code
 first, since it is the most visible part of the game, then work through
 the foundation modules. The AI should be limited to review, debugging and
 small fixes unless the owner records a different decision here.
+
+### 2026-11-23 - Campaign soundtrack (licensed audio)
+
+Tool: Qoder desktop AI coding agent, working from the owner's instruction
+to add the song "Stand Up", and the owner's choice to use a royalty-free
+track when that exact recording was not available in a licensable form.
+
+Owner decisions recorded on this date:
+
+- Add a soundtrack to the game, starting with the campaign.
+- Use a properly licensed royalty-free track rather than an unlicensed
+  commercial song. The owner selected this option when asked.
+
+Assistance provided:
+
+- Sourced and licence-checked a human-made track: "Stand Up" by Pipe
+  Choir, released under CC BY 4.0. The licence and creator were verified
+  on the Free Music Archive and the Wikimedia Commons licence record. A
+  CC BY-NC candidate was rejected because non-commercial terms do not fit
+  a submitted game.
+- Downloaded the original MP3 from the Free Music Archive (8,899,846
+  bytes) into `public/audio/stand-up.mp3`. This is third-party human-made
+  music, not AI-generated audio; no AI music, sound effects or voice were
+  created.
+- Added `src/audio/music.ts` (a looping `HTMLAudioElement` that starts
+  inside the BEGIN/CONTINUE click, exposes mute and state for QA), wired
+  it into `game.ts`, and added the pause-menu MUSIC toggle and start-screen
+  attribution in `hud.ts`.
+- Updated the README, architecture, testing, development and asset-credit
+  documentation, including the full CC BY 4.0 attribution.
+- Wrote and ran a 21-check headless audio suite (passes) and re-ran the
+  72-check campaign suite (72/72) and 54-check story suite (54/54) on the
+  production build. The suites are kept outside this repository.
+- Did not create any artwork, textures, models, music, sound effects or
+  voice, and did not draft the game description.
+
+AI-authored code added in this stage (`wc -l` for the new file; insertions
+from `git diff --numstat` for changed files; comments and blank lines
+included, which overstates the share):
+
+| File | Lines added |
+| --- | --- |
+| `src/audio/music.ts` (new) | 68 |
+| `src/core/game.ts` (added lines) | 18 |
+| `src/ui/hud.ts` (12 added, 1 replaced) | 12 |
+| **Lines added this stage** | **98** |
+
+The 8.9 MB audio file is a third-party asset, not code, and is not counted
+in the source totals. Documentation and configuration changes are tracked
+separately from game code.
+
+Whole-project total at this point:
+
+| Metric | Lines |
+| --- | --- |
+| Total source (all files under `src/`, including CSS) | 9,841 |
+| Written by AI | 9,841 |
+| Written by the owner | 0 |
+
+AI share of the current codebase: 100%. Adding a licensed third-party
+track does not change the code-authorship position: this still exceeds the
+official one-third limit and must be corrected before submission. The
+owner must personally write at least about 6,561 lines (two thirds of
+9,841) and should expect the total to grow, which raises the threshold.
+
+Still not implemented after this stage: sound effects, voice, NPC
+schedules and roaming, inventory and equipment, weather, combat or hacking
+with corrupted units, alternative mission approaches, map filters,
+settings and journal.
+
+Next milestone guidance: no further AI-written features. The owner should
+write the next systems personally, starting with the story, dialogue and
+character code, and record the work here. The AI should be limited to
+review, debugging and small fixes unless the owner records a different
+decision here.

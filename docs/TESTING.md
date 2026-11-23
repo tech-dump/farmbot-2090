@@ -1,9 +1,9 @@
 # Testing
 
 These results are from 2026-11-23 and apply to the Babylon.js build with the
-campaign, mission board, save, story-character, dialogue and corrupted-robot
-systems. The earlier Three.js Stage 1 results are superseded; that build is
-preserved on the `backup/threejs-stage1` branch.
+campaign, mission board, save, story-character, dialogue, corrupted-robot and
+soundtrack systems. The earlier Three.js Stage 1 results are superseded; that
+build is preserved on the `backup/threejs-stage1` branch.
 
 ## Environment
 
@@ -26,6 +26,19 @@ preserved on the `backup/threejs-stage1` branch.
   instances must not overlap; they compete for CPU and each stalls.
 - Screenshots were captured only after the scene reported ready, and the
   run fails loudly on uncaught errors.
+- The music suite serves the production `dist/` through a small static
+  server that sends correct `Content-Type`, `Content-Length` and range
+  headers. The in-repo `vite preview` used for the earlier suites sends
+  `.mp3` as `application/octet-stream` with chunked encoding and no
+  length, which hides the track duration; that is a preview-server quirk,
+  not a game behaviour. Audio playback and metadata decode correctly on
+  the standards-compliant server.
+- On a busy machine the headless scene ran at about 18 fps for the
+  re-runs below (the earlier runs measured 51-60 fps). Key presses,
+  mission checks and hold windows in the QA scripts are now gated on
+  rendered frames or on a state predicate instead of wall-clock sleeps, so
+  the suites still pass at that frame rate. Low-fps wall-clock input was
+  the cause of earlier red runs, not a gameplay regression.
 
 ## Automated checks
 
@@ -33,7 +46,9 @@ preserved on the `backup/threejs-stage1` branch.
 campaign QA suite ran 72 checks; all 72 passed with zero console errors.
 The story/character QA suite ran 54 checks; all 54 passed with zero console
 errors, including a full story playthrough paid at 1,750 credits and 77
-trust.
+trust. After the soundtrack was added, all three suites were re-run against
+the built `dist/`: campaign 72/72, story 54/54 and the new audio suite
+21/21, with no console errors.
 
 | Group | Checks | Result |
 | --- | --- | --- |
@@ -54,6 +69,26 @@ trust.
 | Autosave and clear | 2 | Pass |
 | Difficulty timer scaling (420 s story vs 195 s survival) | 2 | Pass |
 | Mood mission filters (mystery and survival) | 4 | Pass |
+
+Audio suite (21 checks, new):
+
+| Group | Checks | Result |
+| --- | --- | --- |
+| Track served with MPEG type and full length | 3 | Pass |
+| Idle before campaign, source points at the track | 2 | Pass |
+| Campaign start begins playback, no error, volume 0.35 | 4 | Pass |
+| Metadata decode: readyState 4 and 6:11 duration | 2 | Pass |
+| Playback clock advances | 1 | Pass |
+| API mute, pause-screen button label and unmute | 4 | Pass |
+| Muted playback keeps running and the clock advances | 2 | Pass |
+| Start-screen Pipe Choir / CC BY 4.0 credit | 1 | Pass |
+| No uncaught exceptions | 1 | Pass |
+
+The audio checks were run with Chrome's autoplay policy relaxed so an API
+call could start playback; in normal play the click on BEGIN or CONTINUE
+supplies the gesture. Headless Chrome has no audio output device, so this
+verifies decoding, playback state, the clock and the mute path, not
+audible quality.
 
 Story/character suite (54 checks):
 
@@ -108,6 +143,10 @@ Story/character suite:
 - `qa-story-07-story-complete.png` - census complete, 1,750 CR, TRUST 77
 - `qa-story-08-intro.png` - Act I chapter card over the intro cinematic
 
+Audio suite:
+
+- `qa-audio-01-start.png` - title screen with the Pipe Choir CC BY credit
+
 ## Could not be automated
 
 - Real pointer-lock mouse capture in the QA browser (headless blocks the
@@ -116,7 +155,10 @@ Story/character suite:
 - Sprint field-of-view change and head bob feel.
 - Collision behaviour at walls, the doorway and the fence.
 - Jump arc.
-- Audio, because the game has none yet.
+- Audible music quality or loudness on real speakers. Headless Chrome has
+  no output device; the suite verifies decode, playback state, the clock
+  and mute instead. A real browser run is still the only way to judge the
+  mix.
 - Third-person camera feel and wall clipping in a real window; dialogue
   readability at different resolutions; whether the procedural characters
   read clearly at gameplay distance. These were checked only through
@@ -130,7 +172,9 @@ not gameplay.
 
 1. `npm run dev`, open `http://localhost:5173` in Chrome, Edge or Firefox.
 2. Click **NEW CAMPAIGN**, choose a mood and difficulty, click **BEGIN**;
-   confirm the pointer is captured and the HUD shows the mood.
+   confirm the pointer is captured, the HUD shows the mood and the
+   soundtrack starts. The start screen credit must read "Stand Up by Pipe
+   Choir · CC BY 4.0".
 3. Follow the objective; press **J** and accept the prologue contract.
 4. Walk with WASD, sprint with Shift, jump with Space.
 5. Walk to the tractor and press **E**; drive with WASD, brake with Space,
@@ -144,7 +188,8 @@ not gameplay.
 9. Reload the page and click **CONTINUE**; confirm campaign, mission,
    hold progress and position are restored.
 10. Press **T** twice; confirm dusk and night lighting and headlights.
-11. Press **Esc**; confirm pause, then **RESUME**.
+11. Press **Esc**; confirm pause. Toggle **MUSIC: OFF** and back to
+    **MUSIC: ON**, then **RESUME**.
 12. Resize the window; confirm the canvas and HUD adapt.
 13. Watch the console for errors during all of the above.
 14. Run `npm run build` and `npm run preview`; repeat steps 2-12.
@@ -164,7 +209,7 @@ not gameplay.
 ## Known limitations
 
 - The environment is procedural placeholder geometry; no external models,
-  textures, images or audio.
+  textures or images. The one external asset is the credited soundtrack.
 - Dialogue is a DOM panel with typed text, not voiced audio; NPCs do not
   walk schedules or follow the player. Mission interactions are still
   marker-based, and dialogue is a separate system from mission objectives.
@@ -172,9 +217,13 @@ not gameplay.
   damage; alerting one only turns it red and slows it.
 - The third-person camera clamps above the terrain but does not raycast
   against buildings, so it can clip through walls.
-- Weather, audio, inventory and equipment, and alternative mission
-  approaches (stealth, negotiation, sabotage) are not implemented. Map
-  filters and a settings screen are not implemented.
+- Weather, inventory and equipment, and alternative mission approaches
+  (stealth, negotiation, sabotage) are not implemented. Map filters and a
+  settings screen are not implemented.
+- Audio is one looping music track with an on/off toggle: no sound
+  effects, no voice, no volume slider and no positional audio. Browsers
+  that block programmatic playback would need the player to click BEGIN or
+  CONTINUE again.
 - Campaign progress is a single save slot with autosave only; there are no
   manual save slots, settings or journal.
 - Collision boxes ignore height, so collidable objects act as full-height
@@ -187,8 +236,8 @@ not gameplay.
 
 ## Next milestone tests
 
-When dialogue, NPC schedules, inventory, world events, weather and audio
-exist, add tests for dialogue flow and choices, NPC schedules, item pickup
-and use, event triggers and consequences, weather transitions and audio
-playback. Record every result here rather than assuming a compile proves
-behaviour.
+When NPC schedules, inventory, world events, weather, sound effects and
+voice exist, add tests for NPC schedules, item pickup and use, event
+triggers and consequences, weather transitions and non-music audio
+playback. Music playback is already covered by the audio suite above.
+Record every result here rather than assuming a compile proves behaviour.

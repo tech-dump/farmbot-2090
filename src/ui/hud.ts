@@ -23,6 +23,7 @@ export class Hud {
   onContinue: (() => void) | null = null;
   onResume: (() => void) | null = null;
   onMissions: (() => void) | null = null;
+  onMusicToggle: (() => void) | null = null;
   onDifficultyChange: ((difficulty: string) => void) | null = null;
   onDialogueChoice: ((index: number) => void) | null = null;
 
@@ -41,6 +42,7 @@ export class Hud {
   private readonly campaignInfo: HTMLParagraphElement;
   private readonly difficultySelect: HTMLSelectElement;
   private readonly continueButton: HTMLButtonElement;
+  private readonly musicButton: HTMLButtonElement;
   private lastMissionSignature = "";
   private lastStandingSignature = "";
   private readonly compass: HTMLDivElement;
@@ -173,7 +175,7 @@ export class Hud {
             <button class="btn ghost" data-action="continue" type="button" hidden>CONTINUE</button>
           </div>
           <p class="note start-note" data-hud="start-note">Campaign progress saves automatically in this browser.</p>
-          <p class="credit">Created by Maxwell Muthuri · prototype build<br />AI assistance is disclosed in docs/AI_USAGE_LOG.md</p>
+          <p class="credit">Created by Maxwell Muthuri · prototype build<br />Music: "Stand Up" by Pipe Choir · CC BY 4.0<br />AI assistance is disclosed in docs/AI_USAGE_LOG.md</p>
         </div>
       </div>
 
@@ -187,6 +189,7 @@ export class Hud {
           </label>
           <button class="btn primary" data-action="resume" type="button">RESUME</button>
           <button class="btn ghost" data-action="missions" type="button">MISSION BOARD</button>
+          <button class="btn ghost" data-action="music" type="button">MUSIC: ON</button>
           <p class="note" data-hud="pause-note">Esc releases the mouse. Click resume to continue.</p>
         </div>
       </div>
@@ -208,6 +211,7 @@ export class Hud {
     this.campaignInfo = required<HTMLParagraphElement>(root, '[data-hud="campaign-info"]');
     this.difficultySelect = required<HTMLSelectElement>(root, '[data-hud="difficulty"]');
     this.continueButton = required<HTMLButtonElement>(root, '[data-action="continue"]');
+    this.musicButton = required<HTMLButtonElement>(root, '[data-action="music"]');
     this.compass = required<HTMLDivElement>(root, '[data-hud="compass"]');
     this.compassArrow = required<HTMLDivElement>(root, '[data-hud="compass-arrow"]');
     this.compassName = required<HTMLSpanElement>(root, '[data-hud="compass-name"]');
@@ -244,6 +248,9 @@ export class Hud {
     });
     required<HTMLButtonElement>(root, '[data-action="missions"]').addEventListener("click", () => {
       this.onMissions?.();
+    });
+    this.musicButton.addEventListener("click", () => {
+      this.onMusicToggle?.();
     });
     this.difficultySelect.addEventListener("change", () => {
       this.onDifficultyChange?.(this.difficultySelect.value);
@@ -381,6 +388,10 @@ export class Hud {
 
   setPauseNote(text: string): void {
     this.pauseNote.textContent = text;
+  }
+
+  setMusicOn(on: boolean): void {
+    this.musicButton.textContent = on ? "MUSIC: ON" : "MUSIC: OFF";
   }
 
   openDialogue(speaker: string, role: string): void {

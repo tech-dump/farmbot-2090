@@ -41,14 +41,16 @@ Implemented:
   optional intro chapter card and two skippable cinematics.
 - Story flags persist with the save (`crash-seen`, `iri-alliance`,
   `root-hint`, `intro-seen` and others) and unlock extra dialogue.
+- A looping campaign soundtrack ("Stand Up" by Pipe Choir, CC BY 4.0) that
+  starts with the campaign, with a music toggle on the pause menu.
 - Autosave and continue via versioned localStorage saves; start, pause,
   discovery and toast UI.
 
-Not implemented yet: audio, NPC schedules beyond idle facing, inventory
-and equipment, weather, farming and restoration actions, multiple mission
-approaches (stealth, negotiation, sabotage), map filters, settings and
-journal. Characters, aliens and robots are procedural placeholders, not
-photoreal models.
+Not implemented yet: sound effects or voice, NPC schedules beyond idle
+facing, inventory and equipment, weather, farming and restoration actions,
+multiple mission approaches (stealth, negotiation, sabotage), map filters,
+settings and journal. Characters, aliens and robots are procedural
+placeholders, not photoreal models.
 
 ## Technology
 
@@ -59,7 +61,9 @@ photoreal models.
 - WebGL 2 in modern desktop browsers
 
 No backend and no paid services are required. No AI-generated art,
-textures, models, music or sound effects are used.
+textures, models, music or sound effects are used. The single soundtrack
+track is a human-made CC BY 4.0 recording by Pipe Choir; see
+[docs/ASSETS_AND_CREDITS.md](docs/ASSETS_AND_CREDITS.md).
 
 ## Requirements
 
@@ -112,6 +116,7 @@ npm run preview
 | T | Advance time by two hours |
 | Esc | Release the mouse and pause (or close a panel) |
 | Click (map) | Set a GPS waypoint |
+| Pause menu | Toggle the music on or off |
 
 ## Documentation
 
@@ -133,4 +138,6 @@ Original project source code is released under the MIT License (see
 [LICENSE](LICENSE)). Third-party libraries and any future third-party assets
 retain their own licences; see
 [docs/ASSETS_AND_CREDITS.md](docs/ASSETS_AND_CREDITS.md). The MIT licence
-does not apply to assets that are not explicitly compatible with it.
+does not apply to assets that are not explicitly compatible with it. The
+soundtrack "Stand Up" by Pipe Choir is licensed separately under CC BY 4.0
+and is not covered by the MIT licence.

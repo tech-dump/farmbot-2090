@@ -46,7 +46,8 @@ save/load wiring.
 - Campaign flow: NEW CAMPAIGN opens the campaign screen (six moods, four
   difficulty levels); BEGIN applies the chosen mood palette, resets the
   hour, vehicles and discovered locations, starts the prologue objective
-  and saves. CONTINUE restores the last autosave.
+  and saves. CONTINUE restores the last autosave. Both paths start the
+  soundtrack; the pause screen toggles it on or off.
 - Mission flow: J opens the mission board (pausing and releasing the
   pointer); accepting a contract sets the GPS waypoint, HUD track and
   countdown. Fits, interactions, holds and deliveries are evaluated every
@@ -126,7 +127,8 @@ Procedural tractor and pickup, both drivable.
   part updates.
 
 All geometry is procedural placeholder geometry. No external models,
-textures, images or audio are used.
+textures or images are used. The only external asset is the licensed
+soundtrack described under Audio below.
 
 ### Characters and creatures - `src/characters/`
 
@@ -212,6 +214,21 @@ textures, images or audio are used.
 - Loading is defensive: unknown versions or malformed payloads are
   discarded rather than half-applied.
 
+### Audio - `src/audio/music.ts`
+
+- `MusicPlayer` owns one looping `HTMLAudioElement` for
+  `public/audio/stand-up.mp3`, the CC BY 4.0 track by Pipe Choir
+  (attribution in `docs/ASSETS_AND_CREDITS.md` and on the start screen).
+- Playback starts when a campaign begins or a save is continued, so the
+  browser receives it inside a click gesture; if the browser still refuses
+  autoplay, the next start attempt retries.
+- The pause screen has a MUSIC: ON/OFF toggle; muting uses the element's
+  `muted` flag and keeps the loop position. There is no volume slider and
+  no sound effects.
+- The track is served from `public/audio/`, so it must sit beside the
+  built `index.html` for static hosts. The build copies it to
+  `dist/audio/stand-up.mp3`.
+
 ### UI - `src/ui/`
 
 - `hud.ts` - start/pause screens, quest card, compass, interaction prompt,
@@ -241,7 +258,7 @@ textures, images or audio are used.
 | --- | --- |
 | Simulation | Farming and restoration actions, inventory and equipment, world events and long-term consequences |
 | Characters | NPC schedules and roaming, combat or hacking interactions with corrupted units, mission approaches (stealth, negotiation, sabotage) |
-| Atmosphere | Owner-created or licensed audio, weather and dust storms, higher-detail character models |
+| Atmosphere | Sound effects and voice, weather and dust storms, higher-detail character models |
 | Persistence | Settings, journal and mission log beyond the existing save/load |
 | Delivery | Full playthrough QA, performance pass, itch.io HTML5 build |
 
@@ -266,3 +283,7 @@ textures, images or audio are used.
   frame.
 - **Pointer lock as pause.** Browsers release the pointer on Esc, so the
   pause menu follows the lock state instead of fighting the browser.
+- **One licensed soundtrack, no audio engine.** A single looping
+  `HTMLAudioElement` keeps the bundle light and avoids an audio middleware
+  dependency; positional sound and mixing would need a real audio engine
+  later.

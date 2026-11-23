@@ -3,7 +3,7 @@
 ## Current assets
 
 The current open-world prototype contains **no external art, model,
-texture, font or audio assets**.
+texture or font assets**, and **one licensed music track**.
 
 The environment is built at runtime from Babylon.js primitives (boxes,
 cylinders, spheres, ribbons, discs, grounds) and canvas-drawn sign textures
@@ -16,9 +16,11 @@ Interface typography uses fonts already installed on the player's system
 ("Segoe UI" and a Cascadia Mono/Consolas fallback). No font files are
 bundled.
 
-Audio is not implemented yet. When audio is added, each track and sound
-effect must be human-created or properly licensed, with its source and
-licence recorded in this file.
+The game has one soundtrack loop: "Stand Up" by Pipe Choir, a human-made
+track released under Creative Commons Attribution 4.0 (CC BY 4.0). It is
+the only audio asset; there are no sound effects, voice lines or AI-made
+music. The track file is unmodified; the game only loops it and sets the
+playback volume. Attribution appears on the start screen and below.
 
 ## Third-party libraries
 
@@ -47,7 +49,26 @@ Before integrating any external asset:
 
 | Asset | Type | Creator | Source | Licence | Attribution required |
 | --- | --- | --- | --- | --- | --- |
-| _none yet_ | | | | | |
+| "Stand Up" (`public/audio/stand-up.mp3`) | Music | Pipe Choir | [Free Music Archive](https://freemusicarchive.org/music/Pipe_Choir/SGONS_1764/Pipe_Stand_Up) | CC BY 4.0 | Yes |
+
+### "Stand Up" attribution
+
+- Title: "Stand Up"
+- Artist: Pipe Choir
+- Source: Free Music Archive,
+  <https://freemusicarchive.org/music/Pipe_Choir/SGONS_1764/Pipe_Stand_Up>
+  (licence record also on Wikimedia Commons:
+  <https://commons.wikimedia.org/wiki/File:Pipe_Choir_-_11_-_Stand_Up.ogg>)
+- Licence: Creative Commons Attribution 4.0 International (CC BY 4.0),
+  <https://creativecommons.org/licenses/by/4.0/>
+- Length: 6:11; added to the Free Music Archive on 23 November 2017
+- File used: the original MP3 download from the Free Music Archive
+  (8,899,846 bytes), saved as `public/audio/stand-up.mp3`
+- Changes: none to the audio itself. The game loops the track and plays it
+  at a reduced volume (0.35). Attribution is shown on the start screen.
+
+Attribution text: "Stand Up" by Pipe Choir is licensed under CC BY 4.0.
+Source: Free Music Archive (link above).
 
 ## Licence scope
 

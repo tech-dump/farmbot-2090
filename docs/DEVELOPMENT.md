@@ -26,8 +26,9 @@ npm install
 ```text
 farmbot-2090/
 ├── docs/                  development, architecture, testing, assets, AI log
-├── public/assets/         reserved for models, textures, audio, fonts
+├── public/audio/          the licensed soundtrack (stand-up.mp3)
 ├── src/
+│   ├── audio/             looping soundtrack player
 │   ├── core/              constants, math, input and the main game loop
 │   ├── player/            first-person controller
 │   ├── vehicles/          drivable tractor and pickup
@@ -111,6 +112,8 @@ automated checks. It exposes `window.__farmbot`:
 | `save()` / `load()` | Write the autosave / continue from it |
 | `clearSave()` | Remove the save and hide CONTINUE |
 | `openBoard()` / `closeBoard()` | Toggle the mission board |
+| `music()` | Audio element state (started, decoded, time, muted) |
+| `toggleMusicMute()` | Mute or unmute the soundtrack, returns the new muted flag |
 
 Headless QA must call `Emulation.setFocusEmulationEnabled` (or keep the
 window focused); an unfocused window stalls the Babylon render loop and
@@ -123,9 +126,11 @@ can drive movement and verify state and rendering.
 
 - Pointer lock requires a user gesture. If the browser blocks the first
   request, click the game view or RESUME.
-- The game currently has no audio, so no autoplay handling is needed yet.
-  When licensed or owner-created audio is added, initialise the audio context
-  on the first user gesture.
+- The soundtrack starts on BEGIN or CONTINUE, inside those click gestures.
+  If a browser still refuses playback, the next campaign start retries.
+  The track lives in `public/audio/` and Vite copies it to
+  `dist/audio/`; keep that path when deploying. See
+  `docs/ASSETS_AND_CREDITS.md` for its CC BY 4.0 attribution.
 - `@babylonjs/core` is the only runtime dependency. It is imported as
   individual tree-shakeable modules.
 - The in-app preview browser may disable WebGL. If the game shows the
