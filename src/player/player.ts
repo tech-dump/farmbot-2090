@@ -1,178 +1,132 @@
-import * as THREE from 'three';
-import type { Input } from '../core/input';
-import type { Collider } from '../world/world';
+import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import type { Input } from "../core/input";
+import {
+  EYE_HEIGHT,
+  GRAVITY,
+  JUMP_SPEED,
+  MOUSE_SENSITIVITY,
+  PITCH_LIMIT,
+  PLAYER_RADIUS,
+  SPRINT_SPEED,
+  WALK_SPEED,
+  WORLD_LIMIT,
+} from "../core/constants";
+import { approach, clamp, damp } from "../core/math";
+import { heightAt } from "../world/landscape";
+import { resolveCircle, type Collider } from "../world/collision";
 
-export const EYE_HEIGHT = 1.7;
+export const SPAWN = { x: -256, z: 172, yaw: -0.78 };
 
-const PLAYER_RADIUS = 0.38;
-const WALK_SPEED = 4.4;
-const SPRINT_SPEED = 7.4;
-const ACCEL_LAMBDA = 11;
-const GRAVITY = 18;
-const JUMP_SPEED = 6.2;
-const LOOK_SENSITIVITY = 0.0021;
-const BASE_FOV = 72;
-const SPRINT_FOV = 78;
-
-/**
- * First-person controller. Movement is horizontal only; collision against
- * axis-aligned wall boxes is resolved by pushing the player out along the
- * smallest penetration axis.
- */
 export class Player {
-  readonly position = new THREE.Vector3(0, EYE_HEIGHT, 16);
+  readonly position = new Vector3(SPAWN.x, 0, SPAWN.z);
+  yaw = SPAWN.yaw;
+  pitch = 0.02;
+  speed = 0;
+  sprinting = false;
+  grounded = true;
 
-  private readonly velocity = new THREE.Vector3();
+  private velocityX = 0;
+  private velocityZ = 0;
   private verticalVelocity = 0;
-  private grounded = true;
-  private yaw = 0;
-  private pitch = -0.02;
   private bobTime = 0;
-  private bobAmount = 0;
-  private currentFov = BASE_FOV;
 
-  constructor(
-    private readonly camera: THREE.PerspectiveCamera,
-    private readonly input: Input,
-    private readonly colliders: Collider[]
-  ) {
-    this.camera.rotation.order = 'YXZ';
-    this.camera.fov = this.currentFov;
-    this.camera.updateProjectionMatrix();
-    this.syncCamera(0, 0);
+  constructor() {
+    this.position.y = heightAt(SPAWN.x, SPAWN.z);
   }
 
-  update(dt: number): void {
-    const delta = this.input.consumeMouseDelta();
-    this.yaw -= delta.dx * LOOK_SENSITIVITY;
-    this.pitch = THREE.MathUtils.clamp(
-      this.pitch - delta.dy * LOOK_SENSITIVITY,
-      -1.45,
-      1.45
-    );
+  update(dt: number, input: Input, colliders: readonly Collider[]): void {
+    const mouse = input.consumeMouseDelta();
+    if (mouse.x !== 0 || mouse.y !== 0) {
+      this.yaw += mouse.x * MOUSE_SENSITIVITY;
+      this.pitch = clamp(this.pitch - mouse.y * MOUSE_SENSITIVITY, -PITCH_LIMIT, PITCH_LIMIT);
+    }
 
-    const forwardX = -Math.sin(this.yaw);
-    const forwardZ = -Math.cos(this.yaw);
+    const moveForward = (input.isDown("KeyW") ? 1 : 0) - (input.isDown("KeyS") ? 1 : 0);
+    const moveRight = (input.isDown("KeyD") ? 1 : 0) - (input.isDown("KeyA") ? 1 : 0);
+    const sprinting = (input.isDown("ShiftLeft") || input.isDown("ShiftRight")) && moveForward > 0;
+
+    const forwardX = Math.sin(this.yaw);
+    const forwardZ = Math.cos(this.yaw);
     const rightX = Math.cos(this.yaw);
     const rightZ = -Math.sin(this.yaw);
 
-    let moveX = 0;
-    let moveZ = 0;
-    if (this.input.isDown('KeyW')) {
-      moveX += forwardX;
-      moveZ += forwardZ;
-    }
-    if (this.input.isDown('KeyS')) {
-      moveX -= forwardX;
-      moveZ -= forwardZ;
-    }
-    if (this.input.isDown('KeyD')) {
-      moveX += rightX;
-      moveZ += rightZ;
-    }
-    if (this.input.isDown('KeyA')) {
-      moveX -= rightX;
-      moveZ -= rightZ;
+    let directionX = forwardX * moveForward + rightX * moveRight;
+    let directionZ = forwardZ * moveForward + rightZ * moveRight;
+    const directionLength = Math.hypot(directionX, directionZ);
+    if (directionLength > 0.0001) {
+      directionX /= directionLength;
+      directionZ /= directionLength;
     }
 
-    const moveLength = Math.hypot(moveX, moveZ);
-    const sprinting =
-      this.input.isDown('ShiftLeft') || this.input.isDown('ShiftRight');
-    const maxSpeed = sprinting ? SPRINT_SPEED : WALK_SPEED;
+    const targetSpeed = directionLength > 0 ? (sprinting ? SPRINT_SPEED : WALK_SPEED) : 0;
+    const acceleration = this.grounded ? 36 : 9;
+    this.velocityX = approach(this.velocityX, directionX * targetSpeed, acceleration * dt);
+    this.velocityZ = approach(this.velocityZ, directionZ * targetSpeed, acceleration * dt);
 
-    let targetX = 0;
-    let targetZ = 0;
-    if (moveLength > 0) {
-      targetX = (moveX / moveLength) * maxSpeed;
-      targetZ = (moveZ / moveLength) * maxSpeed;
-    }
-
-    const lambda = moveLength > 0 ? ACCEL_LAMBDA : ACCEL_LAMBDA * 1.4;
-    this.velocity.x = THREE.MathUtils.damp(this.velocity.x, targetX, lambda, dt);
-    this.velocity.z = THREE.MathUtils.damp(this.velocity.z, targetZ, lambda, dt);
-
-    this.position.x += this.velocity.x * dt;
-    this.position.z += this.velocity.z * dt;
-    this.resolveCollisions();
-
-    if (this.input.consumePress('Space') && this.grounded) {
+    if (this.grounded && input.consumePress("Space")) {
       this.verticalVelocity = JUMP_SPEED;
       this.grounded = false;
     }
-    this.verticalVelocity -= GRAVITY * dt;
-    this.position.y += this.verticalVelocity * dt;
-    if (this.position.y <= EYE_HEIGHT) {
-      this.position.y = EYE_HEIGHT;
-      this.verticalVelocity = 0;
-      this.grounded = true;
-    }
 
-    const horizontalSpeed = Math.hypot(this.velocity.x, this.velocity.z);
-    const moving = horizontalSpeed > 0.4 && this.grounded;
-    if (moving) {
-      this.bobTime += dt * (5.2 + horizontalSpeed * 0.9);
-      this.bobAmount = THREE.MathUtils.damp(
-        this.bobAmount,
-        Math.min(horizontalSpeed / SPRINT_SPEED, 1),
-        8,
-        dt
-      );
+    let nextX = this.position.x + this.velocityX * dt;
+    let nextZ = this.position.z + this.velocityZ * dt;
+    nextX = clamp(nextX, -WORLD_LIMIT, WORLD_LIMIT);
+    nextZ = clamp(nextZ, -WORLD_LIMIT, WORLD_LIMIT);
+
+    const resolved = resolveCircle(nextX, nextZ, PLAYER_RADIUS, colliders);
+    if (resolved.hit) {
+      this.velocityX *= 0.35;
+      this.velocityZ *= 0.35;
+    }
+    this.position.x = resolved.x;
+    this.position.z = resolved.z;
+
+    const ground = heightAt(this.position.x, this.position.z);
+    if (this.grounded) {
+      this.position.y = ground;
     } else {
-      this.bobAmount = THREE.MathUtils.damp(this.bobAmount, 0, 8, dt);
+      this.verticalVelocity -= GRAVITY * dt;
+      this.position.y += this.verticalVelocity * dt;
+      if (this.position.y <= ground) {
+        this.position.y = ground;
+        this.verticalVelocity = 0;
+        this.grounded = true;
+      }
     }
 
-    const bobY =
-      this.grounded && moving
-        ? Math.sin(this.bobTime * 2) * 0.032 * this.bobAmount
-        : 0;
-    const bobX = Math.cos(this.bobTime) * 0.02 * this.bobAmount;
-
-    const targetFov =
-      sprinting && horizontalSpeed > 1 ? SPRINT_FOV : BASE_FOV;
-    this.currentFov = THREE.MathUtils.damp(this.currentFov, targetFov, 6, dt);
-    if (Math.abs(this.camera.fov - this.currentFov) > 0.01) {
-      this.camera.fov = this.currentFov;
-      this.camera.updateProjectionMatrix();
+    this.speed = Math.hypot(this.velocityX, this.velocityZ);
+    this.sprinting = sprinting && this.speed > 0.6;
+    if (this.grounded && this.speed > 0.4) {
+      this.bobTime += dt * (this.sprinting ? 12.5 : 8.8);
     }
-
-    this.syncCamera(bobX * rightX, bobX * rightZ, bobY);
   }
 
-  private syncCamera(offsetX: number, offsetZ: number, bobY = 0): void {
-    this.camera.position.set(
-      this.position.x + offsetX,
-      this.position.y + bobY,
-      this.position.z + offsetZ
+  applyCamera(camera: FreeCamera, dt: number): void {
+    const bobStrength = this.grounded ? Math.min(1, this.speed / 6) : 0;
+    const bob = Math.sin(this.bobTime * 2.1) * 0.045 * bobStrength;
+    const sway = Math.cos(this.bobTime * 1.05) * 0.032 * bobStrength;
+    const rightX = Math.cos(this.yaw);
+    const rightZ = -Math.sin(this.yaw);
+    camera.position.set(
+      this.position.x + rightX * sway,
+      this.position.y + EYE_HEIGHT + bob,
+      this.position.z + rightZ * sway,
     );
-    this.camera.rotation.set(this.pitch, this.yaw, 0);
+    camera.rotation.set(this.pitch, this.yaw, 0);
+    const targetFov = ((this.sprinting ? 78 : 70) * Math.PI) / 180;
+    camera.fov = damp(camera.fov, targetFov, 9, dt);
   }
 
-  private resolveCollisions(): void {
-    for (const box of this.colliders) {
-      if (
-        this.position.x + PLAYER_RADIUS <= box.minX ||
-        this.position.x - PLAYER_RADIUS >= box.maxX ||
-        this.position.z + PLAYER_RADIUS <= box.minZ ||
-        this.position.z - PLAYER_RADIUS >= box.maxZ
-      ) {
-        continue;
-      }
+  placeAt(x: number, z: number): void {
+    this.position.set(x, heightAt(x, z), z);
+    this.velocityX = 0;
+    this.velocityZ = 0;
+    this.verticalVelocity = 0;
+    this.grounded = true;
+  }
 
-      const pushLeft = this.position.x + PLAYER_RADIUS - box.minX;
-      const pushRight = box.maxX - (this.position.x - PLAYER_RADIUS);
-      const pushBack = this.position.z + PLAYER_RADIUS - box.minZ;
-      const pushFront = box.maxZ - (this.position.z - PLAYER_RADIUS);
-      const smallest = Math.min(pushLeft, pushRight, pushBack, pushFront);
-
-      if (smallest === pushLeft) {
-        this.position.x -= pushLeft;
-      } else if (smallest === pushRight) {
-        this.position.x += pushRight;
-      } else if (smallest === pushBack) {
-        this.position.z -= pushBack;
-      } else {
-        this.position.z += pushFront;
-      }
-    }
+  faceToward(x: number, z: number): void {
+    this.yaw = Math.atan2(x - this.position.x, z - this.position.z);
   }
 }

@@ -1,102 +1,156 @@
 # Architecture
 
-This document describes what exists today (Stage 1). Planned systems are
-listed separately so the documentation does not claim features that are not
+This document describes what exists today. Planned systems are listed
+separately so the documentation does not claim features that are not
 implemented.
+
+The engine was migrated from Three.js to Babylon.js on 2026-11-23 for the
+open-world overhaul. The previous Three.js build is preserved on the
+`backup/threejs-stage1` branch.
 
 ## Current systems
 
 ### Entry point - `src/main.ts`
 
-Finds the `#app` element, creates one `Game` instance and starts the loop.
+Finds `#app`, probes for a WebGL 2 context, creates one `Game` instance and
+shows a readable failure screen if the browser cannot render the game.
 
 ### Game loop - `src/core/game.ts`
 
-Owns the WebGL renderer, scene, camera, clock and pause state.
+Owns the Babylon engine, scene, camera, lights, shadow generator, player,
+vehicles, GPS, HUD and maps.
 
-- Creates the renderer (ACES tone mapping, soft shadows, pixel ratio capped
-  at 2) and appends its canvas to `#app`.
-- Creates the scene background and exponential fog.
-- Builds the world and the player.
-- Runs `requestAnimationFrame` with the delta clamped to 50 ms so a stalled
-  tab cannot throw the player through walls.
-- Raycasts from the centre of the screen each frame against interactable
-  objects (range 3.8 m) and shows an **E** prompt.
-- Pause flow: pointer lock is the source of truth. Locking hides the
-  overlays and resumes simulation; releasing the pointer (Esc) pauses and
-  shows the pause screen.
+- Creates the engine with `preserveDrawingBuffer` enabled so automated
+  screenshot QA works, and caps the hardware scaling level at a pixel ratio
+  of 2.
+- Scene: ACES tone mapping, exponential fog tied to the sky colour,
+  hemispheric fill light and a directional sun with a 2048 px blurred
+  shadow map that follows the active camera target.
+- Day/night: the sun direction, colour, intensity, fog density, sky colour,
+  moonlight and night point lights are recomputed from the in-game hour.
+  A cool directional moon and a warm dusk ambient keep the night and sunset
+  readable; the active vehicle switches on a spot headlight after dark.
+  Standard materials allow six simultaneous lights, so the moon, headlight
+  and settlement point lights bind alongside the sun and fill light. `T`
+  advances two hours; time also advances slowly by itself.
+- Simulation loop clamps delta time to 50 ms, updates either the player or
+  the occupied vehicle, GPS and discovery state, redraws the minimap and
+  renders the scene.
+- Pause flow: pointer lock is the source of truth. Releasing the pointer
+  pauses and shows the pause screen; RESUME re-requests the lock. Opening
+  the map releases the pointer without pausing, and closing it restores the
+  lock.
+- `?test=1` starts the simulation without pointer lock and exposes
+  `window.__farmbot` with state, teleport, waypoint, discovery and vehicle
+  helpers for automated QA. This is a development hook, not gameplay.
 - Handles window resizing.
 
 ### Input - `src/core/input.ts`
 
-- Tracks held keys by `KeyboardEvent.code`.
-- Tracks key presses for one frame (`consumePress`) so actions fire once.
-- Accumulates mouse movement only while the pointer is locked; the player
-  consumes and resets the delta each frame.
-- Owns pointer-lock requests and reports success/failure to the game.
-- Clears held keys on blur and on unlock.
+- Tracks held keys by `KeyboardEvent.code` and one-frame presses
+  (`consumePress`).
+- Accumulates mouse movement only while the pointer is locked (or in test
+  mode), consumed and reset by the player each frame.
+- Owns pointer-lock requests and reports success/failure to the game;
+  clears held keys on blur or unlock.
+- Emits a one-shot key hook for map/time keys.
 
 ### Player - `src/player/player.ts`
 
 First-person controller with no physics engine.
 
-- Yaw/pitch look with pitch clamped to +/- 1.45 rad.
-- Camera rotation order is `YXZ` so yaw and pitch do not roll the view.
-- Movement is accelerated with frame-rate independent damping
-  (`THREE.MathUtils.damp`) toward a walk or sprint target speed.
-- Jump uses simple gravity and a flat ground plane at eye height 1.7 m.
-- Collision is 2D: the player is a circle of radius 0.38 m tested against
-  axis-aligned wall boxes and pushed out along the smallest penetration axis.
-  Colliders ignore height, so all colliding meshes are treated as full-height
-  obstacles. This is sufficient for the Stage 1 layout and keeps the model
-  simple. Areas that need climbing or stairs would need a height-aware
-  solution.
-- Subtle head bob and a small FOV increase while sprinting.
+- Yaw/pitch look (pitch clamped), camera rotation set as pitch/yaw with no
+  roll.
+- Accelerated movement toward walk or sprint speed, sprint only while
+  moving forward.
+- Jump with gravity; the player follows the terrain heightfield.
+- 2D circle-vs-AABB collision (`src/world/collision.ts`) against building
+  colliders, with a speed penalty on contact.
+- Subtle head bob and a damped FOV increase while sprinting.
 
-### World - `src/world/world.ts`
+### Vehicles - `src/vehicles/vehicles.ts`
 
-Builds **THE FORGOTTEN FARM** from primitive meshes and exposes:
+Procedural tractor and pickup, both drivable.
 
-- `colliders` - AABBs used by the player.
-- `interactables` - id, HUD label and placeholder message.
-- `interactableRoots` - meshes tagged with an `interactId` for raycasting.
-- `update(dt)` - drifting dust and the pulsing seed chamber light.
+- Throttle/brake/reverse, speed-sensitive steering, grip scaling and a
+  handbrake (Space).
+- Terrain pitch/roll sampled at front, rear and lateral offsets, with
+  damped orientation; collisions reuse the same circle-vs-AABB resolver.
+- Damped chase camera with ground clamping and a per-vehicle FOV.
+- `VehicleManager` exposes the nearest unoccupied vehicle within range for
+  the E prompt.
 
-Contents: dusty ground with darker patches, the abandoned research facility
-(walls, doorway, roof, consoles, crates), the Last Seed preservation chamber,
-the fenced farm plot with depleted soil strips, a broken irrigation line and
-pump, dead trees, instanced rocks, distant silo silhouettes, fog and dust
-motes. The layout is deterministic through a seeded random generator.
+### World - `src/world/`
 
-All geometry is placeholder. No external models, textures, images or audio
-are used.
+- `landscape.ts` - deterministic basin heightfield with location pads, road
+  flattening, a lake depression and a rim of hills; `heightAt`, `normalAt`
+  and terrain colour sampling.
+- `roads.ts` - road network and segment data used for terrain flattening,
+  routing and map drawing.
+- `structures.ts` - procedural buildings, signs, fields, solar arrays,
+  waterworks, TerraNova towers and props for all nine locations, plus
+  animated turbine hubs and collider generation.
+- `collision.ts` - shared rotated-AABB colliders and circle push-out.
+- `world.ts` - builds the terrain mesh with vertex colours, road ribbons,
+  the lake disc, mountain silhouettes, thin-instanced trees/rocks/shrubs
+  and farm crops; exposes colliders, shadow casters and per-frame animated
+  part updates.
 
-### HUD - `src/ui/hud.ts`
+All geometry is procedural placeholder geometry. No external models,
+textures, images or audio are used.
 
-Builds the interface DOM: start screen, pause screen, objective card,
-crosshair, interaction prompt, toast messages, hint banner and control
-legend. Interface copy only; final narrative and dialogue will be written by
-the project owner.
+### Navigation - `src/nav/`
+
+- `locations.ts` - the nine location definitions (positions, radii, copy).
+- `routing.ts` - Dijkstra over the road graph, with a direct-line fallback.
+- `gps.ts` - waypoint state, route refresh when the player moves, and the
+  in-world beacon (beam and pulsing ring).
+
+### UI - `src/ui/`
+
+- `hud.ts` - start/pause screens, quest card, compass, interaction prompt,
+  speedometer, toasts and the minimap canvas.
+- `minimap.ts` - north-up circular minimap (150 m range) with roads, lake,
+  route, discovered locations, vehicles, waypoint and player heading.
+- `worldmap.ts` - full-screen survey map with location markers,
+  undiscovered sites, roads, route, vehicles, compass rose and scale bar;
+  clicking sets a snapped or custom waypoint. Closing is handled by the
+  game.
+- `mapTypes.ts` - shared map draw state and location colours.
+
+### Shared core
+
+- `constants.ts` - world, player and time tuning.
+- `math.ts` - clamp, smoothstep, lerp, damp and approach helpers.
 
 ## Planned systems (not implemented)
 
 | Stage | Systems |
 | --- | --- |
-| 2 | Facility activation sequence, seed discovery flow, SPROUT companion, till/plant interactions |
-| 3 | Growth stages, watering, irrigation repair, restoration state, resources, missions, save/load |
-| 4 | Licensed or owner-created audio, music layers tied to restoration, visual polish, settings |
-| 5 | Full playthrough testing, performance pass, itch.io HTML5 build |
+| Story | Three acts and eleven missions, mission director, dialogue and choices |
+| Characters | NPC schedules and dialogue for Mama Zuri, Juma, Dr. Sifa, Wanjiku and the TerraNova director |
+| Simulation | Farming and restoration actions, community trust, currency, progression |
+| Atmosphere | Licensed or owner-created audio, weather, dust storms, enhanced character models |
+| Persistence | Versioned localStorage save/load, settings, journal and mission log |
+| Delivery | Full playthrough QA, performance pass, itch.io HTML5 build |
 
 ## Key technical decisions
 
-- **No physics engine.** Walking, jumping and wall collision are handled
-  directly. A physics dependency is not justified by the current scope.
-- **Procedural placeholder world.** Primitives keep the repository small and
-  make it easy to replace the environment with owner-created or licensed
-  assets later.
-- **Relative build paths.** `base: './'` in `vite.config.ts` keeps the build
-  portable to any static host, including itch.io.
-- **Local-only state.** No backend. The save system will use `localStorage`
-  with a versioned payload.
+- **Babylon.js 8.** Chosen by the owner for the overhaul; imports are
+  tree-shaken from `@babylonjs/core`.
+- **One shared heightfield.** Player, vehicles, buildings, roads, lake,
+  vegetation and map all derive positions from `heightAt`, so systems agree
+  on the world.
+- **Procedural placeholder world.** Primitives keep the repository small
+  and make it easy to replace the environment with owner-created or
+  licensed assets later.
+- **No physics engine.** Walking, jumping and vehicle motion are custom
+  arcade models; collisions are 2D AABBs, sufficient for the current
+  layout. A full engine would be added only if climbing, ramps or stacking
+  become requirements.
+- **Relative build paths.** `base: './'` in `vite.config.ts` keeps the
+  build portable to any static host, including itch.io.
+- **Local-only state.** No backend. The future save system will use
+  `localStorage` with a versioned payload.
 - **Pointer lock as pause.** Browsers release the pointer on Esc, so the
   pause menu follows the lock state instead of fighting the browser.

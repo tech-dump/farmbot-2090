@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js 20+ (tested with Node 24/26)
+- Node.js 20+ (tested with Node 24)
 - npm 10+
 - A modern desktop browser with WebGL 2 (Chrome, Edge, Firefox, Safari 16+)
 
@@ -28,10 +28,12 @@ farmbot-2090/
 ├── docs/                  development, architecture, testing, assets, AI log
 ├── public/assets/         reserved for models, textures, audio, fonts
 ├── src/
-│   ├── core/              input handling and the main game loop
+│   ├── core/              constants, math, input and the main game loop
 │   ├── player/            first-person controller
-│   ├── world/             environment construction and interactables
-│   ├── ui/                DOM HUD and overlays
+│   ├── vehicles/          drivable tractor and pickup
+│   ├── world/             heightfield, roads, structures, collision, scene
+│   ├── nav/               locations, route graph and GPS
+│   ├── ui/                HUD, minimap and world map
 │   ├── main.ts            entry point
 │   └── style.css          interface styling
 ├── index.html
@@ -49,12 +51,16 @@ folders.
 2. Open `http://localhost:5173`.
 3. Click **ENGAGE** and allow pointer lock.
 4. Move with WASD, look with the mouse, sprint with Shift, jump with Space.
-5. Walk to the research facility, the seed chamber, the irrigation pump and
-   the soil stake; press **E** when a prompt appears.
-6. Press **Esc** to pause, then **RESUME** to continue.
-7. Resize the window and confirm the view fills the canvas.
-8. Open the browser console and confirm there are no errors.
-9. Run `npm run build` and `npm run preview` to verify the production build.
+5. Walk to the Kijani Tractor on the farm pad and press **E** to drive.
+6. Drive with WASD, test Space as a handbrake, and press **E** to exit.
+7. Press **M** to open the survey map, click a location to set a waypoint,
+   confirm the route and beacon, then close with **M** or **Esc**.
+8. Follow the compass and minimap to the waypoint and confirm arrival.
+9. Press **T** twice to check dusk and night lighting.
+10. Press **Esc** to pause, then **RESUME** to continue.
+11. Resize the window and confirm the view fills the canvas.
+12. Open the browser console and confirm there are no errors.
+13. Run `npm run build` and `npm run preview` to verify the production build.
 
 Record results in [TESTING.md](TESTING.md).
 
@@ -75,15 +81,30 @@ the final game description.
 ## Headless QA
 
 Append `?test=1` to the dev URL to start the simulation without pointer
-lock. This is a development-only hook for automated rendering and movement
-checks; pointer lock and mouse look still need a normal browser test.
+lock and skip the start screen. This is a development-only hook for
+automated checks. It exposes `window.__farmbot`:
+
+| Method | Purpose |
+| --- | --- |
+| `state()` | Position, yaw, speed, pause/map flags, waypoint, route length, discovered locations, hour |
+| `teleport(x, z)` | Move the player or occupied vehicle |
+| `setWaypoint(x, z, label?)` | Set a GPS waypoint |
+| `setWaypointToLocation(id)` | Waypoint at a named location (`farm`, `village`, `service`, `market`, `research`, `hq`, `highway`, `water`, `solar`, `plains`) |
+| `discoverAll()` | Mark all locations discovered |
+| `openMap()` / `closeMap()` | Toggle the survey map |
+| `enterNearest()` | Enter the nearest vehicle within 12 m |
+
+Mouse look in test mode still requires a real browser; headless automation
+can drive movement and verify state and rendering.
 
 ## Notes
 
 - Pointer lock requires a user gesture. If the browser blocks the first
-  request, click the game view again.
+  request, click the game view or RESUME.
 - The game currently has no audio, so no autoplay handling is needed yet.
   When licensed or owner-created audio is added, initialise the audio context
   on the first user gesture.
-- The scene is deliberately dependency-light. Three.js is the only runtime
-  dependency.
+- `@babylonjs/core` is the only runtime dependency. It is imported as
+  individual tree-shakeable modules.
+- The in-app preview browser may disable WebGL. If the game shows the
+  "VISUAL FEED OFFLINE" screen, open the printed URL in a normal browser tab.

@@ -7,21 +7,33 @@ built for **Hack Club Harvest 2026** under the theme **BOUNCE BACK!**
 
 ## Status
 
-Stage 1 prototype: first-person movement, the abandoned farm environment,
-pointer-lock camera control, collision, and placeholder interaction prompts.
-All 3D geometry is procedural placeholder geometry built from primitives.
-Farming, restoration, SPROUT, missions, saving and audio are not implemented
-yet and arrive in later stages.
+Open-world prototype (world, map and vehicles pass). Implemented:
+
+- A 1.2 km x 1.2 km procedural Kijani Basin with nine named locations,
+  roads, a lake, hills, vegetation and a shared heightfield.
+- First-person walking, sprinting, jumping and collision.
+- A drivable Kijani Tractor and Riftway Pickup with chase cameras and
+  arcade terrain physics.
+- Circular minimap, full-screen survey map with click-to-set waypoints,
+  in-world GPS beacon, route line and compass.
+- Day/night cycle (T advances time) with moving sun, moon, shadows, dusk
+  ambient light, night point lights and vehicle headlights.
+- Start, pause, location discovery and toast UI.
+
+Not implemented yet: story acts and missions, NPCs and dialogue, audio and
+weather, farming/restoration gameplay, save/load, settings. The game
+currently uses procedural placeholder geometry only.
 
 ## Technology
 
 - TypeScript
-- Three.js
+- Babylon.js 8
 - Vite
 - HTML / CSS
 - WebGL 2 in modern desktop browsers
 
-No backend and no paid services are required.
+No backend and no paid services are required. No AI-generated art,
+textures, models, music or sound effects are used.
 
 ## Requirements
 
@@ -62,12 +74,15 @@ npm run preview
 
 | Input | Action |
 | --- | --- |
-| W / A / S / D | Move |
+| W / A / S / D | Move / drive |
 | Mouse | Look (after clicking ENGAGE) |
 | Shift | Sprint |
-| Space | Jump |
-| E | Inspect the highlighted object |
-| Escape | Release the mouse and pause |
+| Space | Jump (on foot) / handbrake (vehicle) |
+| E | Enter or exit a nearby vehicle |
+| M | Open or close the world map |
+| T | Advance time by two hours |
+| Esc | Release the mouse and pause |
+| Click (map) | Set a GPS waypoint |
 
 ## Documentation
 

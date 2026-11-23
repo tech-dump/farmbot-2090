@@ -77,3 +77,84 @@ Next milestone guidance: the owner should implement the Stage 2 farming
 interaction loop with review and debugging help from the AI, and record the
 work here. The AI should avoid further large code generation unless the
 owner explicitly accepts the budget impact.
+
+### 2026-11-23 - Open-world overhaul, Babylon.js migration
+
+Tool: Qoder desktop AI coding agent.
+
+Owner decisions recorded on this date:
+
+- Migrate rendering and gameplay from Three.js to Babylon.js (the previous
+  build is preserved on the `backup/threejs-stage1` branch).
+- Lift the conservative 20% internal AI target for this overhaul. This was
+  an explicit owner instruction. The competition's one-third limit still
+  applies, and lifting the internal target does not make the project
+  compliant by itself.
+- Build the world, map and vehicles first, using procedural placeholder
+  assets.
+- The owner remains the creator; the AI is an assistant. No AI artwork,
+  textures, models, music or sound effects were created, and no game
+  description was drafted.
+
+Assistance provided:
+
+- Rewrote the three.js foundation for Babylon.js 8: engine, scene, camera,
+  lighting, shadows, tone mapping and fog.
+- Added the 1.2 km x 1.2 km Kijani Basin heightfield, lake, hills, roads,
+  nine locations, procedural buildings and vegetation.
+- Added the minimap, full survey map with click-to-set waypoints, road-graph
+  routing and the in-world GPS beacon.
+- Added the drivable tractor and pickup with chase cameras and arcade
+  terrain handling.
+- Added day/night lighting, moonlight, vehicle headlights and the
+  six-light material cap.
+- Rewrote automated QA scripts (kept outside this repository) and captured
+  screenshots from the running build.
+- Updated the README, architecture, testing and development documentation.
+
+AI-authored code in the current source tree (`wc -l`, comments and blank
+lines included, which overstates the share):
+
+| File | Lines |
+| --- | --- |
+| `src/core/constants.ts` | 15 |
+| `src/core/math.ts` | 23 |
+| `src/core/input.ts` | 122 |
+| `src/core/game.ts` | 641 |
+| `src/main.ts` | 43 |
+| `src/player/player.ts` | 132 |
+| `src/vehicles/vehicles.ts` | 376 |
+| `src/world/landscape.ts` | 196 |
+| `src/world/roads.ts` | 160 |
+| `src/world/structures.ts` | 866 |
+| `src/world/collision.ts` | 62 |
+| `src/world/world.ts` | 389 |
+| `src/nav/locations.ts` | 150 |
+| `src/nav/routing.ts` | 132 |
+| `src/nav/gps.ts` | 113 |
+| `src/ui/hud.ts` | 223 |
+| `src/ui/minimap.ts` | 168 |
+| `src/ui/worldmap.ts` | 342 |
+| `src/ui/mapTypes.ts` | 28 |
+| `src/style.css` | 752 |
+| **Total code** | **4,933** |
+
+Documentation and configuration (also AI-drafted): `README.md`,
+`docs/`, `index.html`, `vite.config.ts`, `tsconfig.json` - 684 lines
+including this log, tracked separately from game code.
+
+Owner-authored code at this point: 0 lines.
+
+AI share of the current codebase: 100% (4,933 of 4,933 lines). This is far
+above both the 20% internal target (now lifted by the owner for this
+overhaul) and the official one-third limit. It must be corrected before
+submission: the owner has to personally write the large majority of the
+remaining story, mission, NPC, audio, weather, farming and persistence
+systems, and may also want to take ownership of parts of the existing
+foundation. The current state means the project cannot yet be described as
+within the AI limit.
+
+Next milestone guidance: the owner should personally implement the mission
+and story content, dialogue, save/load and the remaining gameplay systems,
+with the AI limited to review, debugging and small fixes unless the owner
+explicitly decides otherwise and records the budget impact here.

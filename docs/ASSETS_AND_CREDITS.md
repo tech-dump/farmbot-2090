@@ -2,14 +2,15 @@
 
 ## Current assets
 
-The Stage 1 build contains **no external art, model, texture, font or audio
-assets**.
+The current open-world prototype contains **no external art, model,
+texture, font or audio assets**.
 
-The environment is built at runtime from Three.js primitives (boxes,
-cylinders, spheres, tori, planes). These are temporary placeholders and are
-intended to be replaced or supplemented with owner-created or properly
-licensed assets before the final submission. No AI-generated artwork,
-models, textures, music or sound effects are used.
+The environment is built at runtime from Babylon.js primitives (boxes,
+cylinders, spheres, ribbons, discs, grounds) and canvas-drawn sign textures
+generated in code. These are temporary placeholders and are intended to be
+replaced or supplemented with owner-created or properly licensed assets
+before the final submission. No AI-generated artwork, models, textures,
+music or sound effects are used.
 
 Interface typography uses fonts already installed on the player's system
 ("Segoe UI" and a Cascadia Mono/Consolas fallback). No font files are
@@ -23,7 +24,7 @@ licence recorded in this file.
 
 | Library | Licence | Use |
 | --- | --- | --- |
-| three | MIT | 3D rendering |
+| @babylonjs/core | Apache-2.0 | 3D rendering |
 | vite | MIT | Development server and build |
 | typescript | Apache-2.0 | Type checking and compilation |
 

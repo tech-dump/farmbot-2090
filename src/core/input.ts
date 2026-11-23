@@ -1,44 +1,94 @@
-type LockChangeHandler = (locked: boolean) => void;
+type LockHandler = (locked: boolean) => void;
 
 /**
- * Keyboard + pointer-lock input. Mouse deltas are accumulated while the
- * pointer is locked and consumed once per frame by the player controller.
+ * Keyboard and mouse state. Pointer lock is the pause source of truth in a
+ * normal session; the automated QA mode (?test=1) accepts input without it
+ * because headless browsers refuse pointer lock.
  */
 export class Input {
+  locked = false;
+  onLockChange: LockHandler | null = null;
+  onLockError: (() => void) | null = null;
+  onKeyDown: ((code: string) => void) | null = null;
+
+  private readonly canvas: HTMLCanvasElement;
+  private readonly testMode: boolean;
   private readonly keys = new Set<string>();
   private readonly pressed = new Set<string>();
   private mouseDX = 0;
   private mouseDY = 0;
-  private readonly canvas: HTMLCanvasElement;
-  private readonly onLockChange: LockChangeHandler;
-  private readonly onLockError: () => void;
 
-  constructor(
-    canvas: HTMLCanvasElement,
-    onLockChange: LockChangeHandler,
-    onLockError: () => void
-  ) {
+  private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (event.code === "Tab" || event.code === "Space" || event.code === "KeyM") {
+      event.preventDefault();
+    }
+    if (!event.repeat) {
+      this.pressed.add(event.code);
+      this.onKeyDown?.(event.code);
+    }
+    this.keys.add(event.code);
+  };
+
+  private readonly handleKeyUp = (event: KeyboardEvent): void => {
+    this.keys.delete(event.code);
+  };
+
+  private readonly handleMouseMove = (event: MouseEvent): void => {
+    if (!this.locked && !this.testMode) {
+      return;
+    }
+    this.mouseDX += event.movementX;
+    this.mouseDY += event.movementY;
+  };
+
+  private readonly handleLockChange = (): void => {
+    const locked = document.pointerLockElement === this.canvas;
+    if (locked === this.locked) {
+      return;
+    }
+    this.locked = locked;
+    if (!locked) {
+      this.keys.clear();
+      this.mouseDX = 0;
+      this.mouseDY = 0;
+    }
+    this.onLockChange?.(locked);
+  };
+
+  private readonly handleBlur = (): void => {
+    this.keys.clear();
+  };
+
+  constructor(canvas: HTMLCanvasElement, testMode: boolean) {
     this.canvas = canvas;
-    this.onLockChange = onLockChange;
-    this.onLockError = onLockError;
-
-    window.addEventListener('keydown', this.handleKeyDown);
-    window.addEventListener('keyup', this.handleKeyUp);
-    window.addEventListener('blur', this.handleBlur);
-    document.addEventListener('mousemove', this.handleMouseMove);
-    document.addEventListener('pointerlockchange', this.handlePointerLockChange);
-    document.addEventListener('pointerlockerror', this.handlePointerLockError);
+    this.testMode = testMode;
+    window.addEventListener("keydown", this.handleKeyDown);
+    window.addEventListener("keyup", this.handleKeyUp);
+    document.addEventListener("mousemove", this.handleMouseMove);
+    document.addEventListener("pointerlockchange", this.handleLockChange);
+    document.addEventListener("pointerlockerror", this.handleLockError);
+    window.addEventListener("blur", this.handleBlur);
   }
 
-  get locked(): boolean {
-    return document.pointerLockElement === this.canvas;
-  }
+  private readonly handleLockError = (): void => {
+    this.onLockError?.();
+  };
 
   requestLock(): void {
-    if (this.locked) return;
-    const result = this.canvas.requestPointerLock() as unknown;
-    if (result instanceof Promise) {
-      result.catch(() => this.onLockError());
+    if (this.testMode) {
+      this.locked = true;
+      this.onLockChange?.(true);
+      return;
+    }
+    const result = this.canvas.requestPointerLock() as Promise<void> | undefined;
+    if (result && typeof result.catch === "function") {
+      result.catch(() => this.onLockError?.());
+    }
+  }
+
+  releaseLock(): void {
+    if (document.pointerLockElement === this.canvas) {
+      document.exitPointerLock();
     }
   }
 
@@ -46,57 +96,27 @@ export class Input {
     return this.keys.has(code);
   }
 
-  /** True once per physical key press. Cleared by endFrame(). */
   consumePress(code: string): boolean {
-    if (!this.pressed.has(code)) return false;
+    if (!this.pressed.has(code)) {
+      return false;
+    }
     this.pressed.delete(code);
     return true;
   }
 
-  consumeMouseDelta(): { dx: number; dy: number } {
-    const delta = { dx: this.mouseDX, dy: this.mouseDY };
+  consumeMouseDelta(): { x: number; y: number } {
+    const delta = { x: this.mouseDX, y: this.mouseDY };
     this.mouseDX = 0;
     this.mouseDY = 0;
     return delta;
   }
 
+  clearMouseDelta(): void {
+    this.mouseDX = 0;
+    this.mouseDY = 0;
+  }
+
   endFrame(): void {
     this.pressed.clear();
   }
-
-  private handleKeyDown = (event: KeyboardEvent): void => {
-    if (event.repeat) return;
-    this.keys.add(event.code);
-    this.pressed.add(event.code);
-    if (this.locked && (event.code === 'Space' || event.code.startsWith('Arrow'))) {
-      event.preventDefault();
-    }
-  };
-
-  private handleKeyUp = (event: KeyboardEvent): void => {
-    this.keys.delete(event.code);
-  };
-
-  private handleBlur = (): void => {
-    this.keys.clear();
-    this.pressed.clear();
-  };
-
-  private handleMouseMove = (event: MouseEvent): void => {
-    if (!this.locked) return;
-    this.mouseDX += event.movementX;
-    this.mouseDY += event.movementY;
-  };
-
-  private handlePointerLockChange = (): void => {
-    const locked = this.locked;
-    this.mouseDX = 0;
-    this.mouseDY = 0;
-    if (!locked) this.keys.clear();
-    this.onLockChange(locked);
-  };
-
-  private handlePointerLockError = (): void => {
-    this.onLockError();
-  };
 }
