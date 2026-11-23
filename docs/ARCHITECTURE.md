@@ -18,7 +18,8 @@ shows a readable failure screen if the browser cannot render the game.
 ### Game loop - `src/core/game.ts`
 
 Owns the Babylon engine, scene, camera, lights, shadow generator, player,
-vehicles, GPS, HUD and maps.
+vehicles, GPS, HUD and maps, plus the campaign state, mission manager and
+save/load wiring.
 
 - Creates the engine with `preserveDrawingBuffer` enabled so automated
   screenshot QA works, and caps the hardware scaling level at a pixel ratio
@@ -36,10 +37,26 @@ vehicles, GPS, HUD and maps.
 - Simulation loop clamps delta time to 50 ms, updates either the player or
   the occupied vehicle, GPS and discovery state, redraws the minimap and
   renders the scene.
+- Campaign flow: NEW CAMPAIGN opens the campaign screen (six moods, four
+  difficulty levels); BEGIN applies the chosen mood palette, resets the
+  hour, vehicles and discovered locations, starts the prologue objective
+  and saves. CONTINUE restores the last autosave.
+- Mission flow: J opens the mission board (pausing and releasing the
+  pointer); accepting a contract sets the GPS waypoint, HUD track and
+  countdown. Fits, interactions, holds and deliveries are evaluated every
+  frame by the mission manager; completion or failure updates credits,
+  trust, HUD and the save.
+- Mood palette: each mood tints the sky, scales fog density and sets tone
+  mapping exposure; the effect is recomputed every frame from the shared
+  day/night lighting.
+- Autosave: progress (campaign, mission, position, hour, discovered
+  locations, driving state) is written every 10 s and on mission events,
+  tab hide and unload.
 - Pause flow: pointer lock is the source of truth. Releasing the pointer
   pauses and shows the pause screen; RESUME re-requests the lock. Opening
   the map releases the pointer without pausing, and closing it restores the
-  lock.
+  lock. The mission board and campaign screen pause the render loop's
+  simulation while open.
 - `?test=1` starts the simulation without pointer lock and exposes
   `window.__farmbot` with state, teleport, waypoint, discovery and vehicle
   helpers for automated QA. This is a development hook, not gameplay.
@@ -106,10 +123,47 @@ textures, images or audio are used.
 - `gps.ts` - waypoint state, route refresh when the player moves, and the
   in-world beacon (beam and pulsing ring).
 
+### Story and campaign - `src/story/campaign.ts`
+
+- `CampaignState` holds the chosen mood, difficulty, credits, trust,
+  completed/failed mission counts and briefing flags, created by
+  `createCampaign(mood, difficulty)`.
+- `MoodDef` (accent colour, sky tint, fog scale, exposure, briefing line,
+  mission filter) and `DifficultyDef` (reward, trust and repair scales,
+  timer scale, guidance) drive the palette and mission rules.
+- `moodOf` / `difficultyOf` resolve saved ids back to definitions.
+
+### Missions - `src/missions/`
+
+- `missions.ts` - mission definitions (giver, act, mood tags, location,
+  objectives, rewards, prerequisites, replay behaviour). Objective kinds:
+  `reach`, `interact`, `hold` (hold E) and `deliver` (drive in range, only
+  when an objective loads cargo).
+- `missionManager.ts` - tracks the active mission, evaluates objectives
+  each frame against a small context (`x`, `z`, `driving`, `holding`,
+  `dt`), scales timers by difficulty, pays rewards (replays pay 25% and no
+  trust), applies the failure penalty, serialises/restores state for the
+  save system and exposes the board view model with locked/available/
+  completed status.
+- The board only offers missions matching the current mood, with
+  prerequisites satisfied.
+
+### Save data - `src/core/game.ts`
+
+- Versioned `SaveData` (v1) under the `farmbot2090.save.v1` localStorage
+  key: campaign state, mission progress (including hold progress), player
+  or vehicle pose, hour and discovered locations.
+- Loading is defensive: unknown versions or malformed payloads are
+  discarded rather than half-applied.
+
 ### UI - `src/ui/`
 
 - `hud.ts` - start/pause screens, quest card, compass, interaction prompt,
-  speedometer, toasts and the minimap canvas.
+  speedometer, campaign chip (mood + standing), toasts and the minimap
+  canvas.
+- `campaignScreen.ts` - mood and difficulty picker with a live summary.
+- `missionBoard.ts` - contract list with status, rewards, prerequisites and
+  accept/postpone actions.
 - `minimap.ts` - north-up circular minimap (150 m range) with roads, lake,
   route, discovered locations, vehicles, waypoint and player heading.
 - `worldmap.ts` - full-screen survey map with location markers,
@@ -127,11 +181,11 @@ textures, images or audio are used.
 
 | Stage | Systems |
 | --- | --- |
-| Story | Three acts and eleven missions, mission director, dialogue and choices |
+| Story | Story dialogue, choices and cutscenes around the existing mission arcs |
 | Characters | NPC schedules and dialogue for Mama Zuri, Juma, Dr. Sifa, Wanjiku and the TerraNova director |
-| Simulation | Farming and restoration actions, community trust, currency, progression |
-| Atmosphere | Licensed or owner-created audio, weather, dust storms, enhanced character models |
-| Persistence | Versioned localStorage save/load, settings, journal and mission log |
+| Simulation | Farming and restoration actions, inventory and equipment, world events and long-term consequences |
+| Atmosphere | Licensed or owner-created audio, weather and dust storms, enhanced character models |
+| Persistence | Settings, journal and mission log beyond the existing save/load |
 | Delivery | Full playthrough QA, performance pass, itch.io HTML5 build |
 
 ## Key technical decisions
@@ -150,7 +204,8 @@ textures, images or audio are used.
   become requirements.
 - **Relative build paths.** `base: './'` in `vite.config.ts` keeps the
   build portable to any static host, including itch.io.
-- **Local-only state.** No backend. The future save system will use
-  `localStorage` with a versioned payload.
+- **Local-only state.** No backend; the save system uses a versioned
+  `localStorage` payload and is written at checkpoints rather than every
+  frame.
 - **Pointer lock as pause.** Browsers release the pointer on Esc, so the
   pause menu follows the lock state instead of fighting the browser.

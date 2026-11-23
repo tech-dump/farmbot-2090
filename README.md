@@ -7,7 +7,7 @@ built for **Hack Club Harvest 2026** under the theme **BOUNCE BACK!**
 
 ## Status
 
-Open-world prototype (world, map and vehicles pass). Implemented:
+Open-world prototype with a playable campaign slice. Implemented:
 
 - A 1.2 km x 1.2 km procedural Kijani Basin with nine named locations,
   roads, a lake, hills, vegetation and a shared heightfield.
@@ -18,11 +18,18 @@ Open-world prototype (world, map and vehicles pass). Implemented:
   in-world GPS beacon, route line and compass.
 - Day/night cycle (T advances time) with moving sun, moon, shadows, dusk
   ambient light, night point lights and vehicle headlights.
-- Start, pause, location discovery and toast UI.
+- Campaign setup with six story moods and four difficulty levels; the mood
+  tints the sky, fog and exposure, and difficulty scales timers and pay.
+- A mission board (J) with mood-filtered contracts, prerequisites, locked
+  and replay states, working objectives (travel, talk/interact, hold E,
+  cargo delivery by vehicle), countdowns, credits and community trust.
+- Autosave and continue via versioned localStorage saves; start, pause,
+  discovery and toast UI.
 
-Not implemented yet: story acts and missions, NPCs and dialogue, audio and
-weather, farming/restoration gameplay, save/load, settings. The game
-currently uses procedural placeholder geometry only.
+Not implemented yet: scripted dialogue and cutscenes, NPC schedules,
+inventory and equipment, world events/weather, farming and restoration
+actions, audio, settings and journal. The game currently uses procedural
+placeholder geometry only.
 
 ## Technology
 
@@ -78,10 +85,11 @@ npm run preview
 | Mouse | Look (after clicking ENGAGE) |
 | Shift | Sprint |
 | Space | Jump (on foot) / handbrake (vehicle) |
-| E | Enter or exit a nearby vehicle |
+| E | Enter or exit a nearby vehicle / interact with characters and props |
+| J | Open or close the mission board |
 | M | Open or close the world map |
 | T | Advance time by two hours |
-| Esc | Release the mouse and pause |
+| Esc | Release the mouse and pause (or close a panel) |
 | Click (map) | Set a GPS waypoint |
 
 ## Documentation

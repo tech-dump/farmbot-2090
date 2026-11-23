@@ -67,6 +67,9 @@ export class Vehicle {
   readonly casters: Mesh[] = [];
 
   private readonly scene: Scene;
+  private readonly spawnX: number;
+  private readonly spawnZ: number;
+  private readonly spawnYaw: number;
   private readonly radius: number;
   private readonly maxSpeed: number;
   private readonly acceleration: number;
@@ -86,6 +89,9 @@ export class Vehicle {
     this.x = spec.x;
     this.z = spec.z;
     this.yaw = spec.yaw;
+    this.spawnX = spec.x;
+    this.spawnZ = spec.z;
+    this.spawnYaw = spec.yaw;
     this.maxSpeed = spec.maxSpeed;
     this.acceleration = spec.acceleration;
     this.braking = spec.braking;
@@ -344,6 +350,21 @@ export class Vehicle {
       z: this.z + rightZ * 3.2,
       yaw: this.yaw,
     };
+  }
+
+  reset(): void {
+    this.occupied = false;
+    this.placeAt(this.spawnX, this.spawnZ, this.spawnYaw);
+  }
+
+  placeAt(x: number, z: number, yaw: number): void {
+    this.x = x;
+    this.z = z;
+    this.yaw = yaw;
+    this.speed = 0;
+    this.groundY = heightAt(x, z);
+    this.root.position.set(x, this.groundY, z);
+    this.root.rotation.y = yaw;
   }
 }
 

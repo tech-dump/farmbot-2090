@@ -16,7 +16,7 @@ import "@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent";
 import { Input } from "./input";
 import { MINUTES_PER_SECOND, START_HOUR } from "./constants";
 import { clamp, lerp, smoothstep } from "./math";
-import { Player } from "../player/player";
+import { Player, SPAWN } from "../player/player";
 import { World } from "../world/world";
 import { Vehicle, VehicleManager } from "../vehicles/vehicles";
 import { Gps } from "../nav/gps";
@@ -25,6 +25,24 @@ import { heightAt } from "../world/landscape";
 import { Hud } from "../ui/hud";
 import { Minimap } from "../ui/minimap";
 import { WorldMap } from "../ui/worldmap";
+import { CampaignScreen } from "../ui/campaignScreen";
+import { MissionBoard } from "../ui/missionBoard";
+import { MissionManager } from "../missions/missionManager";
+import {
+  DIFFICULTIES,
+  MOODS,
+  createCampaign,
+  difficultyOf,
+  moodOf,
+  readSave,
+  saveGame,
+  clearSave,
+  type CampaignState,
+  type DifficultyId,
+  type MoodId,
+  type SaveData,
+} from "../story/campaign";
+import type { MissionDef } from "../missions/missions";
 import type { MapState } from "../ui/mapTypes";
 
 const NIGHT_SKY = Color3.FromHexString("#0a1220");
@@ -48,6 +66,18 @@ interface TestApi {
   openMap: () => void;
   closeMap: () => void;
   enterNearest: () => string | null;
+  campaign: () => Record<string, unknown>;
+  missions: () => Array<Record<string, unknown>>;
+  newCampaign: (mood: string, difficulty: string) => boolean;
+  activateMission: (id: string) => boolean;
+  mission: () => Record<string, unknown> | null;
+  expireMission: () => boolean;
+  interact: () => boolean;
+  save: () => boolean;
+  load: () => boolean;
+  clearSave: () => void;
+  openBoard: () => void;
+  closeBoard: () => void;
 }
 
 export class Game {
@@ -60,6 +90,9 @@ export class Game {
   private readonly vehicles: VehicleManager;
   private readonly gps: Gps;
   private readonly hud: Hud;
+  private readonly campaignSetup: CampaignScreen;
+  private readonly board: MissionBoard;
+  private readonly missions: MissionManager;
   private readonly minimap: Minimap;
   private readonly worldMap: WorldMap;
   private readonly sun: DirectionalLight;
@@ -75,14 +108,21 @@ export class Game {
   private readonly testMode: boolean;
   private readonly discovered = new Set<string>(["farm", "village", "service"]);
 
+  private campaign: CampaignState = createCampaign("heroic", "normal");
   private activeVehicle: Vehicle | null = null;
   private started = false;
   private paused = true;
   private mapOpen = false;
+  private boardOpen = false;
   private hour = START_HOUR;
   private hasEnteredVehicle = false;
   private nearestLocationName = "Kijani Basin";
   private mapAccumulator = 0;
+  private saveAccumulator = 0;
+  private moodTint = Color3.FromHexString("#ffcf8a");
+  private moodTintStrength = 0.18;
+  private moodFogScale = 0.95;
+  private moodExposure = 1.12;
 
   constructor(root: HTMLElement) {
     this.testMode = new URLSearchParams(window.location.search).has("test");
@@ -203,6 +243,37 @@ export class Game {
     this.sunGlow.receiveShadows = false;
 
     this.hud = new Hud(root);
+    this.campaignSetup = new CampaignScreen(root);
+    this.board = new MissionBoard(root);
+    this.missions = new MissionManager(this.campaign, {
+      onObjective: (def: MissionDef, index: number) => {
+        const objective = def.objectives[index];
+        this.gps.setWaypoint(objective.x, objective.z, objective.label, this.currentPoint());
+        this.hud.toast(`${def.title} · ${objective.label}`, 3800);
+        this.saveProgress();
+      },
+      onComplete: (def: MissionDef, credits: number, trust: number) => {
+        this.gps.clear();
+        this.hud.setCompass(null, 0, null);
+        this.hud.setMission(null);
+        this.hud.setObjective(`Contract complete · ${def.title}. Press J to choose the next one.`);
+        this.hud.setStanding(this.campaign.credits, this.campaign.trust, moodOf(this.campaign.mood).name);
+        this.hud.toast(
+          `Contract complete · ${def.title} · +${credits} CR${trust > 0 ? ` · +${trust} trust` : ""}`,
+          5200,
+        );
+        this.saveProgress();
+      },
+      onFail: (def: MissionDef, reason: string) => {
+        this.gps.clear();
+        this.hud.setCompass(null, 0, null);
+        this.hud.setMission(null);
+        this.hud.setObjective(`Contract failed · ${def.title}. Press J to retry.`);
+        this.hud.setStanding(this.campaign.credits, this.campaign.trust, moodOf(this.campaign.mood).name);
+        this.hud.toast(`Contract failed · ${reason}`, 5200);
+        this.saveProgress();
+      },
+    });
     this.minimap = new Minimap(this.hud.minimapCanvas);
     this.worldMap = new WorldMap(root, {
       onWaypoint: (x, z, label) => {
@@ -222,11 +293,34 @@ export class Game {
     };
     this.input.onKeyDown = (code) => this.handleActionKey(code);
 
-    this.hud.onEngage = () => this.engage();
+    this.hud.onNewCampaign = () => this.openCampaignSetup();
+    this.hud.onContinue = () => this.continueFromSave();
     this.hud.onResume = () => this.resume();
+    this.hud.onMissions = () => this.openBoard();
+    this.hud.onDifficultyChange = (difficulty) => this.changeDifficulty(difficulty);
+
+    this.campaignSetup.onBegin = (mood, difficulty) => this.startCampaign(mood, difficulty);
+    this.campaignSetup.onBack = () => this.closeCampaignSetup();
+
+    this.board.onActivate = (id) => {
+      this.activateMission(id);
+    };
+    this.board.onPostpone = () => this.postponeMission();
+    this.board.onClose = () => this.closeBoard();
+
+    this.refreshCampaignHud();
+    this.hud.setContinueVisible(readSave() !== null);
+    this.applyMoodPalette();
+
+    window.addEventListener("beforeunload", () => this.saveProgress());
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") {
+        this.saveProgress();
+      }
+    });
 
     canvas.addEventListener("click", () => {
-      if (this.started && !this.mapOpen && !this.paused && !this.input.locked) {
+      if (this.started && !this.mapOpen && !this.boardOpen && !this.paused && !this.input.locked) {
         this.input.requestLock();
       }
     });
@@ -249,6 +343,11 @@ export class Game {
 
   private frame = (): void => {
     const dt = Math.min(0.05, this.engine.getDeltaTime() / 1000);
+    if (this.campaignSetup.isOpen || this.boardOpen) {
+      this.scene.render();
+      this.input.endFrame();
+      return;
+    }
     if (this.started && this.mapOpen) {
       this.mapAccumulator += this.engine.getDeltaTime();
       if (this.mapAccumulator >= 90) {
@@ -265,19 +364,232 @@ export class Game {
     this.input.endFrame();
   };
 
-  private engage(): void {
+  private openCampaignSetup(): void {
     if (this.started) {
       return;
     }
-    this.started = true;
+    this.hud.showStart(false);
+    this.campaignSetup.show();
+  }
+
+  private closeCampaignSetup(): void {
+    this.campaignSetup.hide();
+    this.hud.setContinueVisible(readSave() !== null);
+    this.hud.showStart(true);
+  }
+
+  private startCampaign(mood: MoodId, difficulty: DifficultyId): void {
+    Object.assign(this.campaign, createCampaign(mood, difficulty));
+    this.missions.postpone();
+    this.gps.clear();
+    this.hud.setCompass(null, 0, null);
+    this.hud.setMission(null);
+    this.campaignSetup.hide();
+    this.board.hide();
+    this.boardOpen = false;
+    this.mapOpen = false;
+    this.worldMap.setVisible(false);
     this.hud.showStart(false);
     this.hud.showPause(false);
     this.hud.setHudVisible(true);
-    this.hud.setObjective("Find the Kijani Tractor at the farm. Press E to drive.");
     this.hud.setLocation("Kijani Family Farm");
+    this.activeVehicle = null;
+    this.hasEnteredVehicle = false;
+    this.hour = START_HOUR;
+    this.discovered.clear();
+    this.discovered.add("farm");
+    this.discovered.add("village");
+    this.discovered.add("service");
+    for (const vehicle of this.vehicles.vehicles) {
+      vehicle.reset();
+    }
+    this.player.placeAt(SPAWN.x, SPAWN.z);
+    this.player.yaw = SPAWN.yaw;
+    this.player.applyCamera(this.camera, 0.016);
+    this.hud.setSpeed(null);
+    this.started = true;
     this.paused = false;
+    this.refreshCampaignHud();
+    this.applyMoodPalette();
+    this.updateEnvironment();
+    this.hud.setObjective("Open the mission board with J and accept a contract.");
+    this.saveProgress();
+    this.hud.setContinueVisible(true);
     this.input.requestLock();
-    this.hud.toast("Kijani Basin online · M opens the survey map", 4200);
+    const moodDef = moodOf(mood);
+    this.hud.toast(`${moodDef.name} · ${moodDef.briefing[0]}`, 7000);
+  }
+
+  private continueFromSave(): void {
+    const save = readSave();
+    if (!save) {
+      this.hud.setContinueVisible(false);
+      this.hud.toast("No saved campaign found in this browser");
+      return;
+    }
+    Object.assign(this.campaign, save.campaign);
+    this.campaignSetup.hide();
+    this.hud.showStart(false);
+    this.hud.showPause(false);
+    this.hud.setHudVisible(true);
+    this.missions.postpone();
+    this.board.hide();
+    this.boardOpen = false;
+    this.discovered.clear();
+    for (const id of save.world.discovered) {
+      this.discovered.add(id);
+    }
+    this.hour = save.world.hour;
+    this.activeVehicle = null;
+    for (const vehicle of this.vehicles.vehicles) {
+      vehicle.reset();
+    }
+    const savedVehicle =
+      save.world.driving === null
+        ? undefined
+        : this.vehicles.vehicles.find((vehicle) => vehicle.id === save.world.driving);
+    if (savedVehicle) {
+      savedVehicle.placeAt(save.world.x, save.world.z, save.world.yaw);
+      savedVehicle.occupied = true;
+      this.activeVehicle = savedVehicle;
+      savedVehicle.applyChaseCamera(this.camera, 0, true);
+      this.hud.setSpeed(0, savedVehicle.name);
+    } else {
+      this.player.placeAt(save.world.x, save.world.z);
+      this.player.yaw = save.world.yaw;
+      this.player.applyCamera(this.camera, 0.016);
+      this.hud.setSpeed(null);
+    }
+    this.started = true;
+    this.paused = false;
+    this.refreshCampaignHud();
+    this.applyMoodPalette();
+    if (save.mission) {
+      this.missions.restore(save.mission);
+      this.hud.setMission(this.missions.track());
+    } else {
+      this.hud.setMission(null);
+      this.hud.setObjective("Press J to browse the mission board.");
+    }
+    this.updateEnvironment();
+    this.input.requestLock();
+    this.hud.toast(`Campaign resumed · saved ${new Date(save.savedAt).toLocaleString()}`);
+  }
+
+  private changeDifficulty(difficulty: string): void {
+    const match = DIFFICULTIES.find((entry) => entry.id === difficulty);
+    if (!match) {
+      return;
+    }
+    this.campaign.difficulty = match.id;
+    this.refreshCampaignHud();
+    this.saveProgress();
+    this.hud.toast(`Difficulty set to ${match.name} · applies to new timers and repairs`);
+  }
+
+  private openBoard(): void {
+    if (this.boardOpen || !this.started || this.campaignSetup.isOpen) {
+      return;
+    }
+    this.boardOpen = true;
+    if (this.mapOpen) {
+      this.mapOpen = false;
+      this.worldMap.setVisible(false);
+    }
+    this.hud.showPrompt(null);
+    this.hud.showPause(false);
+    this.paused = true;
+    this.input.releaseLock();
+    this.input.clearMouseDelta();
+    this.board.show(this.missions.views(this.campaign.mood), this.campaign, this.missions.activeMission?.id ?? null);
+  }
+
+  private closeBoard(): void {
+    if (!this.boardOpen) {
+      return;
+    }
+    this.boardOpen = false;
+    this.board.hide();
+    this.input.clearMouseDelta();
+    if (this.testMode) {
+      this.paused = false;
+    } else {
+      this.input.requestLock();
+    }
+  }
+
+  private activateMission(id: string): boolean {
+    if (!this.missions.activate(id, this.campaign.mood)) {
+      this.hud.toast("That contract is not available right now");
+      return false;
+    }
+    this.refreshCampaignHud();
+    this.hud.setMission(this.missions.track());
+    this.saveProgress();
+    if (this.boardOpen) {
+      this.closeBoard();
+    }
+    return true;
+  }
+
+  private postponeMission(): void {
+    if (!this.missions.activeMission) {
+      return;
+    }
+    this.missions.postpone();
+    this.gps.clear();
+    this.hud.setCompass(null, 0, null);
+    this.hud.setMission(null);
+    this.hud.setObjective("No active contract. Press J to browse the mission board.");
+    this.saveProgress();
+    this.hud.toast("Contract postponed · returns to the board");
+    if (this.boardOpen) {
+      this.closeBoard();
+    }
+  }
+
+  private refreshCampaignHud(): void {
+    const mood = moodOf(this.campaign.mood);
+    const difficulty = difficultyOf(this.campaign.difficulty);
+    this.hud.setStanding(this.campaign.credits, this.campaign.trust, mood.name);
+    this.hud.setCampaignInfo(
+      `${mood.name} · ${difficulty.name} difficulty · ${this.campaign.credits} credits · ${this.campaign.trust} trust`,
+    );
+    this.hud.setDifficultyOptions(
+      DIFFICULTIES.map((entry) => ({ id: entry.id, label: entry.name })),
+      this.campaign.difficulty,
+      false,
+    );
+  }
+
+  private applyMoodPalette(): void {
+    const mood = moodOf(this.campaign.mood);
+    this.moodTint = Color3.FromHexString(mood.tint);
+    this.moodTintStrength = mood.tintStrength;
+    this.moodFogScale = mood.fogScale;
+    this.moodExposure = mood.exposure;
+  }
+
+  private saveProgress(): void {
+    if (!this.started) {
+      return;
+    }
+    const point = this.currentPoint();
+    const data: SaveData = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      campaign: this.campaign,
+      world: {
+        hour: this.hour,
+        x: point.x,
+        z: point.z,
+        yaw: this.activeVehicle ? this.activeVehicle.yaw : this.player.yaw,
+        discovered: Array.from(this.discovered),
+        driving: this.activeVehicle?.id ?? null,
+      },
+      mission: this.missions.serialize(),
+    };
+    saveGame(data);
   }
 
   private resume(): void {
@@ -287,7 +599,7 @@ export class Game {
   }
 
   private handleLockChange(locked: boolean): void {
-    if (!this.started) {
+    if (!this.started || this.campaignSetup.isOpen || this.boardOpen) {
       return;
     }
     if (locked) {
@@ -297,13 +609,34 @@ export class Game {
     }
     if (!this.mapOpen) {
       this.paused = true;
+      this.refreshCampaignHud();
       this.hud.showPause(true);
       this.hud.setPauseNote("Esc releases the mouse. Click RESUME to continue.");
     }
   }
 
   private handleActionKey(code: string): void {
+    if (this.campaignSetup.isOpen) {
+      if (code === "Escape") {
+        this.closeCampaignSetup();
+      }
+      return;
+    }
     if (!this.started) {
+      return;
+    }
+    if (code === "KeyJ") {
+      if (this.boardOpen) {
+        this.closeBoard();
+      } else {
+        this.openBoard();
+      }
+      return;
+    }
+    if (this.boardOpen) {
+      if (code === "Escape") {
+        this.closeBoard();
+      }
       return;
     }
     if (code === "KeyM") {
@@ -325,11 +658,12 @@ export class Game {
   }
 
   private openMap(): void {
-    if (this.mapOpen) {
+    if (this.mapOpen || this.boardOpen || this.campaignSetup.isOpen) {
       return;
     }
     this.mapOpen = true;
     this.hud.showPrompt(null);
+    this.hud.showPause(false);
     this.input.releaseLock();
     this.input.clearMouseDelta();
     this.worldMap.setVisible(true);
@@ -354,17 +688,11 @@ export class Game {
     this.hour = (this.hour + (dt * MINUTES_PER_SECOND) / 60) % 24;
     this.world.update(dt);
 
-    let positionX = this.player.position.x;
-    let positionZ = this.player.position.z;
-
     if (this.activeVehicle) {
       const vehicle = this.activeVehicle;
       vehicle.update(dt, this.input, this.world.colliders);
       vehicle.applyChaseCamera(this.camera, dt);
-      positionX = vehicle.x;
-      positionZ = vehicle.z;
       this.hud.setSpeed(vehicle.speed * 3.6, vehicle.name);
-      this.hud.showPrompt(`Exit ${vehicle.name}`);
       if (this.input.consumePress("KeyE")) {
         this.exitVehicle();
       }
@@ -372,21 +700,59 @@ export class Game {
       this.player.update(dt, this.input, this.world.colliders);
       this.player.applyCamera(this.camera, dt);
       this.hud.setSpeed(null);
-      const nearest = this.vehicles.nearest(this.player.position, 7);
-      this.hud.showPrompt(nearest ? `Drive ${nearest.name}` : null);
-      if (nearest && this.input.consumePress("KeyE")) {
-        this.enterVehicle(nearest);
+      const point = this.player.position;
+      const missionPrompt = this.missions.promptAt(point.x, point.z);
+      if (missionPrompt) {
+        if (missionPrompt.kind === "interact" && this.input.consumePress("KeyE")) {
+          this.missions.interact(point.x, point.z);
+        }
+      } else {
+        const nearest = this.vehicles.nearest(point, 7);
+        if (nearest && this.input.consumePress("KeyE")) {
+          this.enterVehicle(nearest);
+        }
       }
-      positionX = this.player.position.x;
-      positionZ = this.player.position.z;
+    }
+
+    const point = this.currentPoint();
+    this.missions.update({
+      x: point.x,
+      z: point.z,
+      driving: this.activeVehicle !== null,
+      holding: this.input.isDown("KeyE"),
+      dt,
+    });
+
+    if (this.activeVehicle) {
+      this.hud.showPrompt(`Exit ${this.activeVehicle.name}`);
+    } else {
+      const prompt = this.missions.promptAt(point.x, point.z);
+      if (prompt) {
+        this.hud.showPrompt(
+          prompt.kind === "hold"
+            ? `Hold E · ${prompt.label} · ${Math.round(prompt.progress * 100)}%`
+            : prompt.label,
+        );
+      } else {
+        const nearest = this.vehicles.nearest(this.player.position, 7);
+        this.hud.showPrompt(nearest ? `Drive ${nearest.name}` : null);
+      }
     }
 
     this.updateEnvironment();
-    this.gps.update(dt, { x: positionX, z: positionZ });
-    this.updateDiscovery(positionX, positionZ);
-    this.updateCompass(positionX, positionZ);
+    this.gps.update(dt, { x: point.x, z: point.z });
+    this.updateDiscovery(point.x, point.z);
+    this.updateCompass(point.x, point.z);
     this.updateObjective();
+    this.hud.setMission(this.missions.track());
+    this.hud.setStanding(this.campaign.credits, this.campaign.trust, moodOf(this.campaign.mood).name);
     this.minimap.draw(this.buildMapState());
+
+    this.saveAccumulator += dt;
+    if (this.saveAccumulator >= 10) {
+      this.saveAccumulator = 0;
+      this.saveProgress();
+    }
   }
 
   private enterVehicle(vehicle: Vehicle): void {
@@ -396,9 +762,12 @@ export class Game {
     vehicle.applyChaseCamera(this.camera, 0, true);
     this.hud.toast(`${vehicle.name} engaged · WASD to drive · E to exit`);
     this.hud.setSpeed(0, vehicle.name);
-    this.hud.setObjective("Drive the basin. M opens the survey map and sets GPS routes.");
+    if (!this.missions.activeMission) {
+      this.hud.setObjective("Drive the basin. J opens the mission board and sets GPS routes.");
+    }
     this.hasEnteredVehicle = true;
     this.hud.showPrompt(`Exit ${vehicle.name}`);
+    this.saveProgress();
   }
 
   private exitVehicle(): void {
@@ -414,8 +783,11 @@ export class Game {
     this.player.applyCamera(this.camera, 0.016);
     this.hud.setSpeed(null);
     this.hud.showPrompt(null);
-    this.hud.setObjective("Explore on foot. E enters nearby vehicles, M opens the map.");
+    if (!this.missions.activeMission) {
+      this.hud.setObjective("Explore on foot. E enters nearby vehicles, J opens the mission board.");
+    }
     this.hud.toast(`${vehicle.name} parked`);
+    this.saveProgress();
   }
 
   private updateDiscovery(x: number, z: number): void {
@@ -470,6 +842,9 @@ export class Game {
   }
 
   private updateObjective(): void {
+    if (this.missions.activeMission) {
+      return;
+    }
     if (!this.hasEnteredVehicle && this.activeVehicle === null) {
       return;
     }
@@ -517,9 +892,11 @@ export class Game {
 
     const sky = Color3.Lerp(NIGHT_SKY, DAY_SKY, daylight);
     sky.copyFrom(Color3.Lerp(sky, DUSK_SKY, dusk * 0.55));
+    sky.copyFrom(Color3.Lerp(sky, this.moodTint, this.moodTintStrength));
     this.scene.clearColor = new Color4(sky.r, sky.g, sky.b, 1);
     this.scene.fogColor.copyFrom(sky);
-    this.scene.fogDensity = lerp(0.0021, 0.0015, daylight);
+    this.scene.fogDensity = lerp(0.0021, 0.0015, daylight) * this.moodFogScale;
+    this.scene.imageProcessingConfiguration.exposure = this.moodExposure;
 
     this.villageLight.intensity = night * 1.3;
     this.hqLight.intensity = night * 1.0;
@@ -584,7 +961,10 @@ export class Game {
           started: this.started,
           paused: this.paused,
           mapOpen: this.mapOpen,
+          boardOpen: this.boardOpen,
+          campaignSetupOpen: this.campaignSetup.isOpen,
           driving: this.activeVehicle?.name ?? null,
+          drivingId: this.activeVehicle?.id ?? null,
           x: point.x,
           z: point.z,
           y: heightAt(point.x, point.z),
@@ -595,6 +975,16 @@ export class Game {
           discovered: Array.from(this.discovered),
           hour: this.hour,
           location: this.nearestLocationName,
+          mood: this.campaign.mood,
+          difficulty: this.campaign.difficulty,
+          credits: this.campaign.credits,
+          trust: this.campaign.trust,
+          completed: { ...this.campaign.completed },
+          failed: { ...this.campaign.failed },
+          activeMission: this.missions.activeMission?.id ?? null,
+          objectiveIndex: this.missions.activeObjectiveIndex,
+          missionTimer: this.missions.timer,
+          savePresent: readSave() !== null,
         };
       },
       teleport: (x, z) => {
@@ -634,6 +1024,76 @@ export class Game {
         this.enterVehicle(vehicle);
         return vehicle.name;
       },
+      campaign: () => ({
+        mood: this.campaign.mood,
+        difficulty: this.campaign.difficulty,
+        credits: this.campaign.credits,
+        trust: this.campaign.trust,
+        completed: { ...this.campaign.completed },
+        failed: { ...this.campaign.failed },
+        briefingSeen: this.campaign.briefingSeen,
+        activeMission: this.missions.activeMission?.id ?? null,
+      }),
+      missions: () =>
+        this.missions.views(this.campaign.mood).map((view) => ({
+          id: view.def.id,
+          title: view.def.title,
+          status: view.status,
+          completions: view.completions,
+          failures: view.failures,
+          lockedBy: view.lockedBy?.id ?? null,
+        })),
+      newCampaign: (mood, difficulty) => {
+        if (
+          !MOODS.some((entry) => entry.id === mood) ||
+          !DIFFICULTIES.some((entry) => entry.id === difficulty)
+        ) {
+          return false;
+        }
+        this.startCampaign(mood as MoodId, difficulty as DifficultyId);
+        return true;
+      },
+      activateMission: (id) => this.activateMission(id),
+      mission: () => {
+        const def = this.missions.activeMission;
+        if (!def) {
+          return null;
+        }
+        return {
+          id: def.id,
+          title: def.title,
+          objectiveIndex: this.missions.activeObjectiveIndex,
+          objective: def.objectives[this.missions.activeObjectiveIndex].label,
+          timer: this.missions.timer,
+          cargo: this.missions.activeCargo(),
+          track: this.missions.track(),
+        };
+      },
+      interact: () => {
+        const point = this.currentPoint();
+        return this.missions.interact(point.x, point.z);
+      },
+      expireMission: () => {
+        const active = this.missions.serialize();
+        if (!active) {
+          return false;
+        }
+        return this.missions.restore({ ...active, timer: 0.1 });
+      },
+      save: () => {
+        this.saveProgress();
+        return readSave() !== null;
+      },
+      load: () => {
+        this.continueFromSave();
+        return readSave() !== null;
+      },
+      clearSave: () => {
+        clearSave();
+        this.hud.setContinueVisible(false);
+      },
+      openBoard: () => this.openBoard(),
+      closeBoard: () => this.closeBoard(),
     };
     (window as unknown as { __farmbot: TestApi }).__farmbot = api;
     (window as unknown as { __farmbotScene: Scene }).__farmbotScene = this.scene;

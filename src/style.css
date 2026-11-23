@@ -96,7 +96,15 @@ kbd {
   letter-spacing: 0.24em;
 }
 
+.quest-kicker > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .quest-time {
+  flex: none;
   color: rgba(242, 234, 217, 0.55);
   letter-spacing: 0.12em;
 }
@@ -748,5 +756,520 @@ kbd {
   * {
     transition: none !important;
     animation: none !important;
+  }
+}
+
+/* ---------- Campaign, missions and standing ---------- */
+
+.standing {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.standing-chip {
+  padding: 3px 8px;
+  border: 1px solid rgba(242, 234, 217, 0.18);
+  background: rgba(9, 12, 8, 0.55);
+  color: var(--muted);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+}
+
+.standing-chip.mood {
+  color: var(--mood-accent, var(--accent));
+  border-color: color-mix(in srgb, var(--mood-accent, var(--accent)) 40%, transparent);
+}
+
+.quest-timer {
+  margin: 8px 0 0;
+  color: #ffcf7d;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+}
+
+.quest-timer.is-low {
+  color: #ff8a6b;
+}
+
+.start-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.btn.ghost {
+  background: transparent;
+  color: var(--ink);
+  border-color: rgba(242, 234, 217, 0.35);
+}
+
+.btn.ghost:hover {
+  background: rgba(242, 234, 217, 0.08);
+  box-shadow: none;
+}
+
+.btn:disabled {
+  background: transparent;
+  color: rgba(168, 158, 138, 0.6);
+  border-color: rgba(168, 158, 138, 0.3);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.start-note {
+  margin-top: 14px;
+}
+
+.pause-campaign {
+  margin: 0 0 4px;
+  color: var(--mood-accent, var(--accent));
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+}
+
+.pause-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 16px 0 22px;
+  padding: 10px 12px;
+  border: 1px solid rgba(182, 240, 122, 0.18);
+  color: var(--muted);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.pause-field select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  background: #0f130d;
+  color: var(--ink);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+.pause-screen .btn + .btn {
+  margin-top: 12px;
+}
+
+/* Campaign setup */
+
+.campaign-card {
+  width: min(980px, 100%);
+  padding: 38px 40px 34px;
+  text-align: left;
+}
+
+.campaign-card h2 {
+  margin: 2px 0 12px;
+  text-align: left;
+  letter-spacing: 0.22em;
+}
+
+.campaign-lead {
+  max-width: 72ch;
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.mood-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mood-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(242, 234, 217, 0.14);
+  background: rgba(9, 12, 8, 0.72);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.mood-card:hover {
+  border-color: var(--mood-accent, var(--accent));
+}
+
+.mood-card.is-selected {
+  border-color: var(--mood-accent, var(--accent));
+  box-shadow: inset 0 0 0 1px var(--mood-accent, var(--accent));
+  background: color-mix(in srgb, var(--mood-accent, var(--accent)) 8%, rgba(9, 12, 8, 0.8));
+}
+
+.mood-name {
+  color: var(--mood-accent, var(--accent));
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.mood-tagline {
+  font-size: 12px;
+}
+
+.mood-focus {
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.campaign-section {
+  margin: 22px 0 10px;
+  text-align: left;
+}
+
+.difficulty-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.difficulty-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(242, 234, 217, 0.14);
+  background: rgba(9, 12, 8, 0.72);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.difficulty-card.is-selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  background: rgba(182, 240, 122, 0.06);
+}
+
+.difficulty-name {
+  color: var(--accent);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.difficulty-tagline {
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.campaign-summary {
+  margin: 18px 0 0;
+  color: var(--mood-accent, var(--accent));
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+.campaign-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+/* Mission board */
+
+.board-screen {
+  z-index: 70;
+  align-items: stretch;
+  padding: 18px;
+}
+
+.board-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(1080px, 100%);
+  max-height: calc(100vh - 36px);
+  margin: auto;
+  border: 1px solid rgba(182, 240, 122, 0.2);
+  background: rgba(9, 12, 8, 0.94);
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.7);
+}
+
+.board-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid rgba(182, 240, 122, 0.16);
+}
+
+.board-header h2 {
+  margin: 2px 0 4px;
+  font-size: 22px;
+  letter-spacing: 0.24em;
+}
+
+.board-campaign {
+  margin: 0;
+  color: var(--mood-accent, var(--accent));
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+}
+
+.board-close {
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(242, 234, 217, 0.25);
+  background: transparent;
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.board-close:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.board-body {
+  display: grid;
+  grid-template-columns: 380px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+
+.mission-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 14px;
+  overflow-y: auto;
+  list-style: none;
+  border-right: 1px solid rgba(182, 240, 122, 0.14);
+}
+
+.mission-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid rgba(242, 234, 217, 0.14);
+  background: rgba(12, 15, 10, 0.7);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.mission-row:hover {
+  border-color: rgba(182, 240, 122, 0.45);
+}
+
+.mission-row.is-selected {
+  border-color: var(--accent);
+  background: rgba(182, 240, 122, 0.07);
+}
+
+.mission-row-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mission-row-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.mission-status {
+  padding: 2px 6px;
+  border: 1px solid currentColor;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+}
+
+.status-available {
+  color: #b6f07a;
+}
+
+.status-locked {
+  color: #8c938c;
+}
+
+.status-active {
+  color: #ffcf7d;
+}
+
+.status-completed {
+  color: #8fe3c0;
+}
+
+.status-failed {
+  color: #ff8a6b;
+}
+
+.mission-row-meta {
+  color: var(--muted);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
+
+.mission-row-reward {
+  color: #d8c98a;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 9.5px;
+}
+
+.mission-detail {
+  display: flex;
+  flex-direction: column;
+  padding: 20px 26px 24px;
+  overflow-y: auto;
+}
+
+.mission-detail h3 {
+  margin: 0 0 8px;
+  font-size: 24px;
+  letter-spacing: 0.06em;
+}
+
+.mission-description {
+  margin: 0 0 16px;
+  color: rgba(242, 234, 217, 0.8);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.mission-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+  margin: 0 0 16px;
+  padding: 14px 0;
+  border-top: 1px solid rgba(182, 240, 122, 0.14);
+  border-bottom: 1px solid rgba(182, 240, 122, 0.14);
+}
+
+.mission-facts div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mission-facts dt {
+  color: var(--muted);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+}
+
+.mission-facts dd {
+  margin: 0;
+  font-size: 12px;
+}
+
+.mission-objectives-heading {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+}
+
+.mission-objectives {
+  margin: 0 0 18px;
+  padding-left: 20px;
+  color: rgba(242, 234, 217, 0.78);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.mission-objectives li.is-current {
+  color: var(--accent);
+}
+
+.mission-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: auto;
+}
+
+.mission-actions .btn {
+  padding: 12px 26px;
+  font-size: 11px;
+}
+
+.mission-tracked {
+  color: #ffcf7d;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+}
+
+.board-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 12px 24px;
+  border-top: 1px solid rgba(182, 240, 122, 0.14);
+  color: var(--muted);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+}
+
+.board-hint {
+  text-align: right;
+}
+
+@media (max-width: 860px) {
+  .board-body {
+    grid-template-columns: 1fr;
+  }
+
+  .mission-list {
+    max-height: 34vh;
+    border-right: 0;
+    border-bottom: 1px solid rgba(182, 240, 122, 0.14);
+  }
+
+  .mood-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .difficulty-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .board-footer {
+    flex-direction: column;
+  }
+
+  .board-hint {
+    text-align: left;
   }
 }

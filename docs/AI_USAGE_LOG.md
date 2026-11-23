@@ -158,3 +158,70 @@ Next milestone guidance: the owner should personally implement the mission
 and story content, dialogue, save/load and the remaining gameplay systems,
 with the AI limited to review, debugging and small fixes unless the owner
 explicitly decides otherwise and records the budget impact here.
+
+### 2026-11-23 - Campaign, mission board and save systems
+
+Tool: Qoder desktop AI coding agent, working from the owner-supplied
+gameplay-expansion brief.
+
+Assistance provided:
+
+- Added `src/story/campaign.ts`: campaign state, six story moods with sky
+  tint, fog, exposure and briefing data, four difficulty levels with
+  reward, trust, repair and timer scales, and defensive save parsing.
+- Added `src/missions/missions.ts` and `missionManager.ts`: mission data,
+  mission board view model, travel, interact, hold and cargo-delivery
+  objectives, timers, replay rewards, failure penalty and save/restore.
+- Added `src/ui/campaignScreen.ts` (mood/difficulty picker) and
+  `src/ui/missionBoard.ts` (contract list), and extended the HUD with a
+  campaign chip, mission timer, hold progress and standing.
+- Wired the systems into `game.ts`: campaign start/continue, J board,
+  mission tracking, mood palette, autosave every 10 s and on events,
+  and new test-mode helpers for automated QA.
+- Fixed a delivery bug found in testing (cargo was required even for
+  missions that never load cargo) and a mission-board status bug (locked
+  contracts displayed as available).
+- Ran the campaign QA suite in headless Chrome (72 checks) and captured
+  screenshots; results are recorded in `docs/TESTING.md`.
+- Did not create any artwork, textures, models, music, sound effects or
+  voice, and did not draft the game description.
+
+AI-authored code (`wc -l`, comments and blank lines included, which
+overstates the share):
+
+| File | Lines |
+| --- | --- |
+| `src/story/campaign.ts` | 318 |
+| `src/missions/missions.ts` | 332 |
+| `src/missions/missionManager.ts` | 336 |
+| `src/ui/campaignScreen.ts` | 140 |
+| `src/ui/missionBoard.ts` | 256 |
+| `src/core/game.ts` | 1,101 |
+| `src/ui/hud.ts` | 333 |
+| `src/vehicles/vehicles.ts` | 397 |
+| `src/style.css` | 1,275 |
+| **Total code (all referenced files)** | **4,488** |
+
+Lines added in this stage across new and changed files: 2,496 of the
+project's 7,429 source lines. Whole-project total:
+
+| Metric | Lines |
+| --- | --- |
+| Total source (all files) | 7,429 |
+| Written by AI | 7,429 |
+| Written by the owner | 0 |
+
+AI share of the current codebase: 100%. This is above the official
+one-third limit and must be corrected before submission: the owner needs
+to personally write the large majority of the code, including at minimum
+the remaining systems listed below.
+
+Still not implemented: scripted dialogue and cutscenes, NPC schedules,
+inventory and equipment, world events, weather, farming/restoration
+actions, audio, settings and journal.
+
+Next milestone guidance: the owner should personally write the dialogue,
+NPC and farming systems, and should also consider rewriting enough of the
+existing AI-authored modules to bring the project within the limit. The
+AI should be limited to review, debugging and small fixes unless the owner
+records a different decision here.
