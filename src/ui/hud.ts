@@ -24,6 +24,7 @@ export class Hud {
   onResume: (() => void) | null = null;
   onMissions: (() => void) | null = null;
   onDifficultyChange: ((difficulty: string) => void) | null = null;
+  onDialogueChoice: ((index: number) => void) | null = null;
 
   private readonly hud: HTMLDivElement;
   private readonly startScreen: HTMLDivElement;
@@ -53,6 +54,18 @@ export class Hud {
   private readonly speedName: HTMLSpanElement;
   private readonly toastElement: HTMLDivElement;
   private readonly pauseNote: HTMLParagraphElement;
+  private readonly dialogue: HTMLDivElement;
+  private readonly dialogueSpeaker: HTMLSpanElement;
+  private readonly dialogueRole: HTMLSpanElement;
+  private readonly dialogueText: HTMLParagraphElement;
+  private readonly dialogueChoices: HTMLDivElement;
+  private readonly dialogueHint: HTMLParagraphElement;
+  private readonly cinematic: HTMLDivElement;
+  private readonly cineSpeaker: HTMLParagraphElement;
+  private readonly cineText: HTMLParagraphElement;
+  private readonly chapter: HTMLDivElement;
+  private readonly chapterAct: HTMLParagraphElement;
+  private readonly chapterTitle: HTMLHeadingElement;
   private toastTimer: number | null = null;
 
   readonly minimapCanvas: HTMLCanvasElement;
@@ -88,7 +101,8 @@ export class Hud {
         <div class="legend-panel">
           <span><kbd>WASD</kbd> move</span>
           <span><kbd>Shift</kbd> sprint</span>
-          <span><kbd>E</kbd> act</span>
+          <span><kbd>E</kbd> act / talk</span>
+          <span><kbd>V</kbd> camera</span>
           <span><kbd>J</kbd> missions</span>
           <span><kbd>M</kbd> map</span>
           <span><kbd>T</kbd> time</span>
@@ -102,6 +116,30 @@ export class Hud {
           <span class="speed-name" data-hud="speed-name"></span>
         </div>
         <div class="toast" data-hud="toast" hidden></div>
+        <div class="dialogue" data-hud="dialogue" hidden>
+          <div class="dialogue-card">
+            <header class="dialogue-head">
+              <span class="dialogue-speaker" data-hud="dialogue-speaker"></span>
+              <span class="dialogue-role" data-hud="dialogue-role"></span>
+            </header>
+            <p class="dialogue-text" data-hud="dialogue-text"></p>
+            <div class="dialogue-choices" data-hud="dialogue-choices" hidden></div>
+            <p class="dialogue-hint" data-hud="dialogue-hint">E · continue</p>
+          </div>
+        </div>
+        <div class="cinematic" data-hud="cinematic" hidden>
+          <div class="cinematic-bar top"></div>
+          <div class="cinematic-bar bottom"></div>
+          <div class="cinematic-card">
+            <p class="cinematic-speaker" data-hud="cine-speaker"></p>
+            <p class="cinematic-text" data-hud="cine-text"></p>
+            <p class="cinematic-hint">E · continue · Esc · skip</p>
+          </div>
+        </div>
+        <div class="chapter-card" data-hud="chapter" hidden>
+          <p class="eyebrow" data-hud="chapter-act"></p>
+          <h2 data-hud="chapter-title"></h2>
+        </div>
       </div>
 
       <div class="screen start-screen" data-screen="start">
@@ -113,16 +151,18 @@ export class Hud {
             Somebody has to bring it back.
           </p>
           <ul class="feature-list">
-            <li>Six story moods and four difficulty settings</li>
-            <li>Mission board with timed and replayable contracts</li>
-            <li>Free roam across nine locations with GPS</li>
-            <li>Drivable tractor and pickup</li>
+            <li>Third-person Amani with a first-person camera toggle</li>
+            <li>Five story characters with branching dialogue and mission choices</li>
+            <li>Veyari visitors, a crash site and corrupted machine patrols</li>
+            <li>Eleven locations, drivable tractor and pickup, GPS</li>
+            <li>Six story moods, four difficulties, replayable contracts</li>
           </ul>
           <div class="controls-grid">
             <span><kbd>WASD</kbd> Move</span>
             <span><kbd>Shift</kbd> Sprint</span>
             <span><kbd>Space</kbd> Jump / handbrake</span>
-            <span><kbd>E</kbd> Act / enter vehicle</span>
+            <span><kbd>E</kbd> Act / talk / enter vehicle</span>
+            <span><kbd>V</kbd> First-person / third-person</span>
             <span><kbd>J</kbd> Mission board</span>
             <span><kbd>M</kbd> World map</span>
             <span><kbd>T</kbd> Advance time</span>
@@ -179,6 +219,18 @@ export class Hud {
     this.speedName = required<HTMLSpanElement>(root, '[data-hud="speed-name"]');
     this.toastElement = required<HTMLDivElement>(root, '[data-hud="toast"]');
     this.pauseNote = required<HTMLParagraphElement>(root, '[data-hud="pause-note"]');
+    this.dialogue = required<HTMLDivElement>(root, '[data-hud="dialogue"]');
+    this.dialogueSpeaker = required<HTMLSpanElement>(root, '[data-hud="dialogue-speaker"]');
+    this.dialogueRole = required<HTMLSpanElement>(root, '[data-hud="dialogue-role"]');
+    this.dialogueText = required<HTMLParagraphElement>(root, '[data-hud="dialogue-text"]');
+    this.dialogueChoices = required<HTMLDivElement>(root, '[data-hud="dialogue-choices"]');
+    this.dialogueHint = required<HTMLParagraphElement>(root, '[data-hud="dialogue-hint"]');
+    this.cinematic = required<HTMLDivElement>(root, '[data-hud="cinematic"]');
+    this.cineSpeaker = required<HTMLParagraphElement>(root, '[data-hud="cine-speaker"]');
+    this.cineText = required<HTMLParagraphElement>(root, '[data-hud="cine-text"]');
+    this.chapter = required<HTMLDivElement>(root, '[data-hud="chapter"]');
+    this.chapterAct = required<HTMLParagraphElement>(root, '[data-hud="chapter-act"]');
+    this.chapterTitle = required<HTMLHeadingElement>(root, '[data-hud="chapter-title"]');
     this.minimapCanvas = required<HTMLCanvasElement>(root, ".minimap");
 
     required<HTMLButtonElement>(root, '[data-action="new"]').addEventListener("click", () => {
@@ -329,5 +381,58 @@ export class Hud {
 
   setPauseNote(text: string): void {
     this.pauseNote.textContent = text;
+  }
+
+  openDialogue(speaker: string, role: string): void {
+    this.dialogueSpeaker.textContent = speaker.toUpperCase();
+    this.dialogueRole.textContent = role;
+    this.dialogue.hidden = false;
+    this.showPrompt(null);
+  }
+
+  setDialogue(text: string, hint: string): void {
+    this.dialogueText.textContent = text;
+    this.dialogueHint.textContent = hint;
+  }
+
+  showDialogueChoices(labels: readonly string[]): void {
+    this.dialogueChoices.replaceChildren();
+    if (labels.length === 0) {
+      this.dialogueChoices.hidden = true;
+      return;
+    }
+    labels.forEach((label, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "dialogue-choice";
+      button.textContent = `${index + 1}. ${label}`;
+      button.addEventListener("click", () => this.onDialogueChoice?.(index));
+      this.dialogueChoices.appendChild(button);
+    });
+    this.dialogueChoices.hidden = false;
+  }
+
+  closeDialogue(): void {
+    this.dialogue.hidden = true;
+    this.dialogueChoices.hidden = true;
+  }
+
+  showCinematic(visible: boolean): void {
+    this.cinematic.hidden = !visible;
+  }
+
+  setCinematic(speaker: string, text: string): void {
+    this.cineSpeaker.textContent = speaker;
+    this.cineText.textContent = text;
+  }
+
+  showChapter(act: string, title: string): void {
+    this.chapterAct.textContent = act;
+    this.chapterTitle.textContent = title;
+    this.chapter.hidden = false;
+  }
+
+  hideChapter(): void {
+    this.chapter.hidden = true;
   }
 }

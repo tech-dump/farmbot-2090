@@ -36,7 +36,13 @@ save/load wiring.
   advances two hours; time also advances slowly by itself.
 - Simulation loop clamps delta time to 50 ms, updates either the player or
   the occupied vehicle, GPS and discovery state, redraws the minimap and
-  renders the scene.
+  renders the scene. It also drives the character, alien and corrupted-robot
+  actors every simulated frame. While a dialogue or cinematic is open, the
+  loop switches to a presentation update: the world keeps animating and the
+  camera orbits the player, but player movement and missions are frozen.
+- Counts rendered frames (`frames` in the test state) so automated QA can
+  gate input on real simulation frames instead of wall-clock sleeps; shader
+  compilation can stall the first seconds at 0.4-1 fps.
 - Campaign flow: NEW CAMPAIGN opens the campaign screen (six moods, four
   difficulty levels); BEGIN applies the chosen mood palette, resets the
   hour, vehicles and discovered locations, starts the prologue objective
@@ -74,8 +80,14 @@ save/load wiring.
 
 ### Player - `src/player/player.ts`
 
-First-person controller with no physics engine.
+Movement controller with a first-person and a third-person camera, no
+physics engine.
 
+- Third-person by default: the camera sits 5.2 m behind Amani, uses the
+  same yaw/pitch, targets 1.55 m above the player and clamps above the
+  terrain. V toggles back to first-person and hides the body mesh.
+- The third-person body (Amani) is a `HumanoidRig` posed each frame from
+  ground speed and sprint state.
 - Yaw/pitch look (pitch clamped), camera rotation set as pitch/yaw with no
   roll.
 - Accelerated movement toward walk or sprint speed, sprint only while
@@ -105,7 +117,7 @@ Procedural tractor and pickup, both drivable.
 - `roads.ts` - road network and segment data used for terrain flattening,
   routing and map drawing.
 - `structures.ts` - procedural buildings, signs, fields, solar arrays,
-  waterworks, TerraNova towers and props for all nine locations, plus
+  waterworks, TerraNova towers and props for all eleven locations, plus
   animated turbine hubs and collider generation.
 - `collision.ts` - shared rotated-AABB colliders and circle push-out.
 - `world.ts` - builds the terrain mesh with vertex colours, road ribbons,
@@ -116,9 +128,30 @@ Procedural tractor and pickup, both drivable.
 All geometry is procedural placeholder geometry. No external models,
 textures, images or audio are used.
 
+### Characters and creatures - `src/characters/`
+
+- `humanoid.ts` - deterministic humanoid builder from boxes and a sphere
+  (skin, shirt, trousers, shoes, hair, hat, scarf, backpack), a billboard
+  nameplate, and a pose driver for walk, sprint, idle breathing and an
+  airborne pose. Materials are cached per scene. Amani and all five NPCs
+  use this rig.
+- `characters.ts` - places the five story characters at their locations and
+  exposes them for proximity prompts; characters idle-animate and labels
+  stay visible.
+- `aliens.ts` - builds the Veyari crash scar (ring, shard, dust), the envoy
+  Iri (hovering cone body, ring, tendrils), and a short cinematic trigger
+  when the player first comes within 34 m. Iri turns to face the player
+  within 12 m.
+- `robots.ts` - six corrupted machines across five silhouettes (security,
+  harvester, scout, heavy, hover), each with a waypoint route, waiting
+  pauses, a per-robot red visor material, detection radius, alert state
+  (turn, accelerate, pulse red) and a return to patrol beyond 1.8x the
+  detection range. Exposes `nearest`, `reset` and per-frame updates.
+
 ### Navigation - `src/nav/`
 
-- `locations.ts` - the nine location definitions (positions, radii, copy).
+- `locations.ts` - the eleven location definitions (positions, radii, copy),
+  including the Veyari crash site.
 - `routing.ts` - Dijkstra over the road graph, with a direct-line fallback.
 - `gps.ts` - waypoint state, route refresh when the player moves, and the
   in-world beacon (beam and pulsing ring).
@@ -132,6 +165,23 @@ textures, images or audio are used.
   mission filter) and `DifficultyDef` (reward, trust and repair scales,
   timer scale, guidance) drive the palette and mission rules.
 - `moodOf` / `difficultyOf` resolve saved ids back to definitions.
+- `flags` is a validated `Record<string, boolean>` that stores story state
+  (`intro-seen`, `crash-seen`, `iri-met`, `iri-explained`, `iri-alliance`,
+  `root-hint`, `ledger-hint`, `root-question`, `director-confronted`). Flags
+  are saved, cleared by a new campaign and unlock extra dialogue lines.
+
+### Dialogue and cinematics - `src/story/dialogue.ts`
+
+- `DialogueDef` per character: speaker, role, intro lines and choices.
+  Choices can carry trust, credits, a flag and a mission id; mission offers
+  are filtered at open time against the current mood, prerequisites and
+  board status.
+- Conversation flow is intro lines, then choices, then a reply per choice,
+  all advanced with E/Space/Enter or by clicking a choice. Movement and
+  missions pause; the camera orbits the player.
+- `INTRO_LINES` and `CRASH_LINES` are skippable cinematic scripts played
+  with letterbox bars; the intro also shows an "Act I - Back to Kijani"
+  chapter card. Esc skips a skippable cinematic.
 
 ### Missions - `src/missions/`
 
@@ -147,6 +197,12 @@ textures, images or audio are used.
   completed status.
 - The board only offers missions matching the current mood, with
   prerequisites satisfied.
+- The story chain is prologue, tractor, water, `descend` (shaft mouth,
+  5 s hold, core-tap interact), `crash-site` (cross the scar, speak at the
+  wreck; sets `crash-seen`), `iri-first-contact` and `machine-census`
+  (survey the solar yard, harvest field and waterworks). The three main
+  story missions are no longer mood-locked; the census is offered from
+  Iri's dialogue.
 
 ### Save data - `src/core/game.ts`
 
@@ -159,8 +215,10 @@ textures, images or audio are used.
 ### UI - `src/ui/`
 
 - `hud.ts` - start/pause screens, quest card, compass, interaction prompt,
-  speedometer, campaign chip (mood + standing), toasts and the minimap
-  canvas.
+  speedometer, campaign chip (mood + standing), toasts, the minimap canvas,
+  the dialogue panel with clickable choices, the cinematic letterbox card
+  and the chapter card. Interface copy only; no gameplay state is stored
+  in the DOM layer.
 - `campaignScreen.ts` - mood and difficulty picker with a live summary.
 - `missionBoard.ts` - contract list with status, rewards, prerequisites and
   accept/postpone actions.
@@ -181,10 +239,9 @@ textures, images or audio are used.
 
 | Stage | Systems |
 | --- | --- |
-| Story | Story dialogue, choices and cutscenes around the existing mission arcs |
-| Characters | NPC schedules and dialogue for Mama Zuri, Juma, Dr. Sifa, Wanjiku and the TerraNova director |
 | Simulation | Farming and restoration actions, inventory and equipment, world events and long-term consequences |
-| Atmosphere | Licensed or owner-created audio, weather and dust storms, enhanced character models |
+| Characters | NPC schedules and roaming, combat or hacking interactions with corrupted units, mission approaches (stealth, negotiation, sabotage) |
+| Atmosphere | Owner-created or licensed audio, weather and dust storms, higher-detail character models |
 | Persistence | Settings, journal and mission log beyond the existing save/load |
 | Delivery | Full playthrough QA, performance pass, itch.io HTML5 build |
 

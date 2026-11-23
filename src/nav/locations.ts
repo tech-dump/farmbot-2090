@@ -8,7 +8,8 @@ export type LocationKind =
   | "water"
   | "solar"
   | "plains"
-  | "service";
+  | "service"
+  | "crash";
 
 export interface LocationDef {
   id: string;
@@ -123,6 +124,17 @@ export const LOCATIONS: LocationDef[] = [
     blurb: "Panels as far as the eye can see. Enough power for the whole basin, if it were shared fairly.",
     flatten: 105,
     discovery: 80,
+  },
+  {
+    id: "crash",
+    name: "Veyari Crash Site",
+    short: "Crash Site",
+    x: 432,
+    z: 268,
+    kind: "crash",
+    blurb: "A wound in the dust with a broken ring at its centre. The wreck is intact enough to be intentional.",
+    flatten: 70,
+    discovery: 90,
   },
   {
     id: "plains",

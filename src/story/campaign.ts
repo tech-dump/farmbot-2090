@@ -169,6 +169,7 @@ export interface CampaignState {
   trust: number;
   completed: Record<string, number>;
   failed: Record<string, number>;
+  flags: Record<string, boolean>;
   briefingSeen: boolean;
 }
 
@@ -215,6 +216,7 @@ export function createCampaign(mood: MoodId, difficulty: DifficultyId): Campaign
     trust: 10,
     completed: {},
     failed: {},
+    flags: {},
     briefingSeen: false,
   };
 }
@@ -235,6 +237,19 @@ function countRecord(value: unknown): Record<string, number> {
   for (const [key, count] of Object.entries(value as Record<string, unknown>)) {
     if (typeof count === "number" && Number.isFinite(count) && count >= 0) {
       result[key] = Math.floor(count);
+    }
+  }
+  return result;
+}
+
+function flagRecord(value: unknown): Record<string, boolean> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+  const result: Record<string, boolean> = {};
+  for (const [key, flag] of Object.entries(value as Record<string, unknown>)) {
+    if (flag === true) {
+      result[key] = true;
     }
   }
   return result;
@@ -277,6 +292,7 @@ export function readSave(): SaveData | null {
         trust: typeof parsed.campaign.trust === "number" ? Math.max(0, Math.floor(parsed.campaign.trust)) : 0,
         completed: countRecord(parsed.campaign.completed),
         failed: countRecord(parsed.campaign.failed),
+        flags: flagRecord(parsed.campaign.flags),
         briefingSeen: parsed.campaign.briefingSeen === true,
       },
       world: {

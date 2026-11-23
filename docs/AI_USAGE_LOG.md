@@ -225,3 +225,84 @@ NPC and farming systems, and should also consider rewriting enough of the
 existing AI-authored modules to bring the project within the limit. The
 AI should be limited to review, debugging and small fixes unless the owner
 records a different decision here.
+
+### 2026-11-23 - Story characters, Veyari and Corrupted machines
+
+Tool: Qoder desktop AI coding agent, working from the two owner-supplied
+master prompts for the story/character/enemy/open-world expansion and the
+gameplay expansion.
+
+Assistance provided:
+
+- Added procedural humanoids with articulated limbs, clothing options,
+  nameplates and a walk/sprint/idle/airborne pose driver; Amani uses the
+  same rig, and the camera now defaults to third person with a V toggle.
+- Placed the five story characters (Mama Zuri, Juma, Wanjiku, Dr. Sifa,
+  TerraNova Director) and a branching dialogue system with choices that
+  grant trust, credits, story flags and missions.
+- Added the Veyari crash site, the envoy Iri, a first-contact conversation
+  and the crash-reveal cinematic.
+- Added six Corrupted machine patrols across five silhouettes with
+  waypoint patrols, detection, an alert state and a return to patrol.
+- Extended the mission chain with `descend`, `crash-site`,
+  `iri-first-contact` and `machine-census`, added story flags to the save
+  format, the Act I intro card, the intro cinematic and the cinematic
+  skip behaviour.
+- Fixed issues found in testing: a nameplate canvas context type error, a
+  lost-input problem caused by shader-compile stalls (QA now gates input on
+  rendered frames) and a camera that only applied on the next update (the
+  test hook now applies it immediately).
+- Wrote and ran a 54-check headless story QA suite (outside this
+  repository) and re-ran the 72-check campaign suite; both pass. Results
+  and screenshots are listed in `docs/TESTING.md`.
+- Did not create any artwork, textures, models, music, sound effects or
+  voice; the crash scar, ship, Iri, robots and humans are code-built
+  primitives. Did not draft the game description.
+
+Code counted as AI-authored in this stage (`wc -l`, comments and blank
+lines included, which overstates the share):
+
+| File | Lines |
+| --- | --- |
+| `src/characters/humanoid.ts` (new) | 327 |
+| `src/characters/characters.ts` (new) | 176 |
+| `src/characters/aliens.ts` (new) | 339 |
+| `src/characters/robots.ts` (new) | 326 |
+| `src/story/dialogue.ts` (new) | 208 |
+| `src/core/game.ts` (added lines) | 496 |
+| `src/missions/missions.ts` (added lines) | 142 |
+| `src/ui/hud.ts` (added lines) | 111 |
+| `src/style.css` (added lines) | 161 |
+| `src/player/player.ts` (added lines) | 21 |
+| `src/story/campaign.ts` (added lines) | 16 |
+| `src/nav/locations.ts` (added lines) | 13 |
+| `src/ui/mapTypes.ts` (added line) | 1 |
+| **Lines added this stage** | **2,337** |
+
+Whole-project total at this point:
+
+| Metric | Lines |
+| --- | --- |
+| Total source (all files under `src/`) | 9,744 |
+| Written by AI | 9,744 |
+| Written by the owner | 0 |
+
+AI share of the current codebase: 100%. This exceeds the official
+one-third limit by a wide margin. Lifting the internal 20% target for
+this overhaul did not change that. The project cannot be submitted as
+compliant in this state: the owner must personally write at least about
+6,500 lines (two thirds of 9,744) and should expect the total to grow,
+which raises the threshold. Replacing AI-authored modules with
+owner-authored code is the only reliable way to correct this.
+
+Still not implemented after this stage: audio, inventory and equipment,
+weather, NPC schedules and roaming, combat or hacking with corrupted
+units, alternative mission approaches, map filters, settings and journal,
+and higher-detail assets. Characters, aliens and machines are procedural
+placeholders.
+
+Next milestone guidance: stop expanding features with AI-written code. The
+owner should take ownership of the story, dialogue and character code
+first, since it is the most visible part of the game, then work through
+the foundation modules. The AI should be limited to review, debugging and
+small fixes unless the owner records a different decision here.

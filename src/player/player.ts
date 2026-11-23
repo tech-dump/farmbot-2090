@@ -102,7 +102,27 @@ export class Player {
     }
   }
 
-  applyCamera(camera: FreeCamera, dt: number): void {
+  applyCamera(camera: FreeCamera, dt: number, thirdPerson = false): void {
+    if (thirdPerson) {
+      const distance = 5.2;
+      const cosPitch = Math.cos(this.pitch);
+      const forwardX = Math.sin(this.yaw) * cosPitch;
+      const forwardY = -Math.sin(this.pitch);
+      const forwardZ = Math.cos(this.yaw) * cosPitch;
+      const targetY = this.position.y + 1.55;
+      const cameraX = this.position.x - forwardX * distance;
+      const cameraZ = this.position.z - forwardZ * distance;
+      let cameraY = targetY - forwardY * distance + 0.15;
+      const floor = heightAt(cameraX, cameraZ) + 0.5;
+      if (cameraY < floor) {
+        cameraY = floor;
+      }
+      camera.position.set(cameraX, cameraY, cameraZ);
+      camera.rotation.set(this.pitch, this.yaw, 0);
+      const targetFov = ((this.sprinting ? 84 : 76) * Math.PI) / 180;
+      camera.fov = damp(camera.fov, targetFov, 9, dt);
+      return;
+    }
     const bobStrength = this.grounded ? Math.min(1, this.speed / 6) : 0;
     const bob = Math.sin(this.bobTime * 2.1) * 0.045 * bobStrength;
     const sway = Math.cos(this.bobTime * 1.05) * 0.032 * bobStrength;

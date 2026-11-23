@@ -25,4 +25,5 @@ export const KIND_COLORS: Record<LocationKind, string> = {
   solar: "#e8d05c",
   plains: "#c47a52",
   service: "#d8d0b8",
+  crash: "#7ff0e2",
 };

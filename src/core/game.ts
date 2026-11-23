@@ -28,6 +28,18 @@ import { WorldMap } from "../ui/worldmap";
 import { CampaignScreen } from "../ui/campaignScreen";
 import { MissionBoard } from "../ui/missionBoard";
 import { MissionManager } from "../missions/missionManager";
+import { createHumanoid, animateHumanoid, type HumanoidRig } from "../characters/humanoid";
+import { Characters } from "../characters/characters";
+import { Veyari, CRASH_SITE } from "../characters/aliens";
+import { Corrupted } from "../characters/robots";
+import {
+  CRASH_LINES,
+  DIALOGUES,
+  INTRO_LINES,
+  type CinematicLine,
+  type DialogueChoice,
+  type DialogueDef,
+} from "../story/dialogue";
 import {
   DIFFICULTIES,
   MOODS,
@@ -57,6 +69,19 @@ const GROUND_NIGHT = Color3.FromHexString("#232a33");
 const MOON_COLOR = Color3.FromHexString("#b7ccf0");
 const DUSK_AMBIENT = Color3.FromHexString("#bf9a76");
 
+interface DialogueSession {
+  def: DialogueDef;
+  nodeIndex: number;
+  phase: "lines" | "choices" | "reply";
+}
+
+interface CinematicSession {
+  lines: CinematicLine[];
+  index: number;
+  skippable: boolean;
+  onDone: () => void;
+}
+
 interface TestApi {
   state: () => Record<string, unknown>;
   teleport: (x: number, z: number) => void;
@@ -78,6 +103,20 @@ interface TestApi {
   clearSave: () => void;
   openBoard: () => void;
   closeBoard: () => void;
+  cameraMode: () => string;
+  setCameraMode: (mode: string) => void;
+  characters: () => Array<Record<string, unknown>>;
+  robots: () => Array<Record<string, unknown>>;
+  aliens: () => Record<string, unknown>;
+  flags: () => Record<string, boolean>;
+  setFlag: (name: string, value: boolean) => void;
+  openDialogue: (id: string) => boolean;
+  dialogue: () => Record<string, unknown> | null;
+  dialogueAdvance: () => void;
+  dialogueChoose: (index: number) => void;
+  cinematic: () => Record<string, unknown> | null;
+  skipCinematic: () => void;
+  playIntro: () => void;
 }
 
 export class Game {
@@ -93,6 +132,10 @@ export class Game {
   private readonly campaignSetup: CampaignScreen;
   private readonly board: MissionBoard;
   private readonly missions: MissionManager;
+  private readonly characters: Characters;
+  private readonly aliens: Veyari;
+  private readonly robots: Corrupted;
+  private readonly amani: HumanoidRig;
   private readonly minimap: Minimap;
   private readonly worldMap: WorldMap;
   private readonly sun: DirectionalLight;
@@ -114,6 +157,13 @@ export class Game {
   private paused = true;
   private mapOpen = false;
   private boardOpen = false;
+  private thirdPerson = true;
+  private dialogueSession: DialogueSession | null = null;
+  private cinematicSession: CinematicSession | null = null;
+  private chapterTimer: number | null = null;
+  private cinematicTime = 0;
+  private frameCount = 0;
+  private readonly robotAlerts = new Map<string, number>();
   private hour = START_HOUR;
   private hasEnteredVehicle = false;
   private nearestLocationName = "Kijani Basin";
@@ -215,8 +265,34 @@ export class Game {
       shadow.addShadowCaster(caster, true);
     }
 
+    this.characters = new Characters(this.scene);
+    this.aliens = new Veyari(this.scene);
+    this.robots = new Corrupted(this.scene);
+    this.amani = createHumanoid(
+      this.scene,
+      {
+        skin: "#6b4128",
+        shirt: "#3f6b58",
+        trousers: "#3b3f45",
+        shoes: "#1b1815",
+        hair: "#16110e",
+        accent: "#e5b34e",
+        backpack: true,
+        scale: 1.02,
+      },
+    );
+    this.amani.root.position.set(SPAWN.x, heightAt(SPAWN.x, SPAWN.z), SPAWN.z);
+    for (const caster of [
+      ...this.characters.casters,
+      ...this.aliens.casters,
+      ...this.robots.casters,
+      ...this.amani.casters,
+    ]) {
+      shadow.addShadowCaster(caster, true);
+    }
+
     this.player = new Player();
-    this.player.applyCamera(this.camera, 0.016);
+    this.player.applyCamera(this.camera, 0.016, this.thirdPerson);
 
     this.gps = new Gps(this.scene);
 
@@ -298,6 +374,7 @@ export class Game {
     this.hud.onResume = () => this.resume();
     this.hud.onMissions = () => this.openBoard();
     this.hud.onDifficultyChange = (difficulty) => this.changeDifficulty(difficulty);
+    this.hud.onDialogueChoice = (index) => this.chooseDialogue(index);
 
     this.campaignSetup.onBegin = (mood, difficulty) => this.startCampaign(mood, difficulty);
     this.campaignSetup.onBack = () => this.closeCampaignSetup();
@@ -320,7 +397,15 @@ export class Game {
     });
 
     canvas.addEventListener("click", () => {
-      if (this.started && !this.mapOpen && !this.boardOpen && !this.paused && !this.input.locked) {
+      if (
+        this.started &&
+        !this.mapOpen &&
+        !this.boardOpen &&
+        !this.paused &&
+        !this.input.locked &&
+        !this.dialogueSession &&
+        !this.cinematicSession
+      ) {
         this.input.requestLock();
       }
     });
@@ -342,6 +427,7 @@ export class Game {
   }
 
   private frame = (): void => {
+    this.frameCount += 1;
     const dt = Math.min(0.05, this.engine.getDeltaTime() / 1000);
     if (this.campaignSetup.isOpen || this.boardOpen) {
       this.scene.render();
@@ -358,7 +444,11 @@ export class Game {
       return;
     }
     if (this.started && !this.paused) {
-      this.update(dt);
+      if (this.dialogueSession || this.cinematicSession) {
+        this.updatePresentation(dt);
+      } else {
+        this.update(dt);
+      }
     }
     this.scene.render();
     this.input.endFrame();
@@ -403,9 +493,17 @@ export class Game {
     for (const vehicle of this.vehicles.vehicles) {
       vehicle.reset();
     }
+    this.robots.reset();
+    this.dialogueSession = null;
+    this.cinematicSession = null;
+    this.hud.closeDialogue();
+    this.hud.showCinematic(false);
+    this.hud.hideChapter();
+    this.thirdPerson = true;
+    this.amani.root.setEnabled(true);
     this.player.placeAt(SPAWN.x, SPAWN.z);
     this.player.yaw = SPAWN.yaw;
-    this.player.applyCamera(this.camera, 0.016);
+    this.player.applyCamera(this.camera, 0.016, this.thirdPerson);
     this.hud.setSpeed(null);
     this.started = true;
     this.paused = false;
@@ -418,6 +516,9 @@ export class Game {
     this.input.requestLock();
     const moodDef = moodOf(mood);
     this.hud.toast(`${moodDef.name} · ${moodDef.briefing[0]}`, 7000);
+    if (!this.testMode) {
+      this.playIntro();
+    }
   }
 
   private continueFromSave(): void {
@@ -444,6 +545,12 @@ export class Game {
     for (const vehicle of this.vehicles.vehicles) {
       vehicle.reset();
     }
+    this.robots.reset();
+    this.dialogueSession = null;
+    this.cinematicSession = null;
+    this.hud.closeDialogue();
+    this.hud.showCinematic(false);
+    this.hud.hideChapter();
     const savedVehicle =
       save.world.driving === null
         ? undefined
@@ -457,7 +564,7 @@ export class Game {
     } else {
       this.player.placeAt(save.world.x, save.world.z);
       this.player.yaw = save.world.yaw;
-      this.player.applyCamera(this.camera, 0.016);
+      this.player.applyCamera(this.camera, 0.016, this.thirdPerson);
       this.hud.setSpeed(null);
     }
     this.started = true;
@@ -548,6 +655,244 @@ export class Game {
     }
   }
 
+  private toggleCamera(): void {
+    if (this.activeVehicle) {
+      this.hud.toast("Exit the vehicle to change camera");
+      return;
+    }
+    this.thirdPerson = !this.thirdPerson;
+    this.amani.root.setEnabled(this.thirdPerson);
+    this.hud.toast(this.thirdPerson ? "Third-person camera · V to switch" : "First-person camera · V to switch");
+  }
+
+  private handleInteract(): void {
+    const point = this.player.position;
+    const completed = this.missions.interact(point.x, point.z);
+    if (completed) {
+      return;
+    }
+    const npc = this.characters.nearest(point.x, point.z, 3.6);
+    if (npc) {
+      this.openDialogue(npc.def.dialogue);
+      return;
+    }
+    const alien = this.aliens.nearest(point.x, point.z, 4.2);
+    if (alien) {
+      this.openDialogue(alien.id);
+      return;
+    }
+    const vehicle = this.vehicles.nearest(point, 7);
+    if (vehicle) {
+      this.enterVehicle(vehicle);
+    }
+  }
+
+  private availableChoices(def: DialogueDef): DialogueChoice[] {
+    const views = this.missions.views(this.campaign.mood);
+    return def.choices.filter((choice) => {
+      if (!choice.mission) {
+        return true;
+      }
+      const view = views.find((entry) => entry.def.id === choice.mission);
+      return view !== undefined && (view.status === "available" || view.status === "failed");
+    });
+  }
+
+  private openDialogue(id: string): void {
+    const def = DIALOGUES[id];
+    if (!def) {
+      return;
+    }
+    this.dialogueSession = { def, nodeIndex: 0, phase: "lines" };
+    this.hud.showPrompt(null);
+    this.hud.showDialogueChoices([]);
+    this.hud.openDialogue(def.speaker, def.role);
+    this.hud.setDialogue(def.nodes[0], "E · continue");
+    this.input.clearMouseDelta();
+  }
+
+  private advanceDialogue(): void {
+    const session = this.dialogueSession;
+    if (!session) {
+      return;
+    }
+    if (session.phase === "reply") {
+      this.closeDialogue();
+      return;
+    }
+    if (session.phase === "choices") {
+      return;
+    }
+    session.nodeIndex += 1;
+    if (session.nodeIndex < session.def.nodes.length) {
+      this.hud.setDialogue(session.def.nodes[session.nodeIndex], "E · continue");
+      return;
+    }
+    const choices = this.availableChoices(session.def);
+    if (choices.length === 0) {
+      this.closeDialogue();
+      return;
+    }
+    session.phase = "choices";
+    this.hud.setDialogue("What do you say?", "1–3 · choose · click an option");
+    this.hud.showDialogueChoices(choices.map((choice) => choice.label));
+  }
+
+  private chooseDialogue(index: number): void {
+    const session = this.dialogueSession;
+    if (!session || session.phase !== "choices") {
+      return;
+    }
+    const choice = this.availableChoices(session.def)[index];
+    if (!choice) {
+      return;
+    }
+    if (choice.trust) {
+      this.campaign.trust = Math.max(0, this.campaign.trust + choice.trust);
+    }
+    if (choice.credits) {
+      this.campaign.credits += choice.credits;
+    }
+    if (choice.flag) {
+      this.campaign.flags[choice.flag] = true;
+    }
+    session.phase = "reply";
+    this.hud.setDialogue(choice.reply, "E · close");
+    this.hud.showDialogueChoices([]);
+    if (choice.mission) {
+      this.activateMission(choice.mission);
+    }
+    this.refreshCampaignHud();
+    this.saveProgress();
+  }
+
+  private closeDialogue(): void {
+    if (!this.dialogueSession) {
+      return;
+    }
+    this.dialogueSession = null;
+    this.hud.closeDialogue();
+    this.input.clearMouseDelta();
+    if (!this.testMode) {
+      this.input.requestLock();
+    }
+  }
+
+  private playIntro(): void {
+    this.hud.showChapter("ACT I · HOMECOMING", "Back to Kijani");
+    this.startCinematic(INTRO_LINES, () => {
+      this.campaign.flags["intro-seen"] = true;
+      this.hud.hideChapter();
+      this.hud.toast("Act I · Press J to open the mission board", 6000);
+      this.saveProgress();
+    });
+    if (this.chapterTimer !== null) {
+      window.clearTimeout(this.chapterTimer);
+    }
+    this.chapterTimer = window.setTimeout(() => {
+      this.chapterTimer = null;
+      this.hud.hideChapter();
+    }, 2600);
+  }
+
+  private startCinematic(lines: CinematicLine[], onDone: () => void): void {
+    if (lines.length === 0) {
+      onDone();
+      return;
+    }
+    this.cinematicSession = { lines, index: 0, skippable: true, onDone };
+    this.cinematicTime = 0;
+    this.hud.showPrompt(null);
+    this.hud.showCinematic(true);
+    this.hud.setCinematic(lines[0].speaker, lines[0].text);
+    this.input.clearMouseDelta();
+  }
+
+  private advanceCinematic(): void {
+    const session = this.cinematicSession;
+    if (!session) {
+      return;
+    }
+    session.index += 1;
+    if (session.index >= session.lines.length) {
+      this.endCinematic(false);
+      return;
+    }
+    const line = session.lines[session.index];
+    this.hud.setCinematic(line.speaker, line.text);
+  }
+
+  private endCinematic(skipped: boolean): void {
+    const session = this.cinematicSession;
+    if (!session) {
+      return;
+    }
+    this.cinematicSession = null;
+    this.hud.showCinematic(false);
+    this.hud.hideChapter();
+    if (this.chapterTimer !== null) {
+      window.clearTimeout(this.chapterTimer);
+      this.chapterTimer = null;
+    }
+    this.input.clearMouseDelta();
+    session.onDone();
+    if (!this.testMode) {
+      this.input.requestLock();
+    }
+    if (skipped) {
+      this.saveProgress();
+    }
+  }
+
+  private updateActors(dt: number): void {
+    const point = this.currentPoint();
+    this.characters.update(dt, point.x, point.z, !this.activeVehicle);
+    this.aliens.update(dt, point.x, point.z);
+    this.robots.update(dt, point.x, point.z, (robot) => {
+      const now = performance.now();
+      const last = this.robotAlerts.get(robot.def.id) ?? 0;
+      if (now - last < 15000) {
+        return;
+      }
+      this.robotAlerts.set(robot.def.id, now);
+      this.hud.toast(`Corrupted unit alert · ${robot.def.name} has you in view`, 4600);
+    });
+
+    if (this.activeVehicle) {
+      this.amani.root.setEnabled(false);
+      return;
+    }
+    const feet = this.player.position;
+    this.amani.root.setEnabled(this.thirdPerson);
+    this.amani.root.position.set(feet.x, feet.y, feet.z);
+    this.amani.root.rotation.y = this.player.yaw;
+    animateHumanoid(this.amani, dt, this.player.speed, this.player.sprinting, this.player.grounded);
+
+    if (!this.campaign.flags["crash-seen"] && Math.hypot(feet.x - CRASH_SITE.x, feet.z - CRASH_SITE.z) < 34) {
+      this.campaign.flags["crash-seen"] = true;
+      this.startCinematic(CRASH_LINES, () => {
+        this.hud.toast("Something is waiting at the crash site · press E near Iri", 5200);
+        this.saveProgress();
+      });
+    }
+  }
+
+  private updatePresentation(dt: number): void {
+    if (!this.cinematicSession) {
+      return;
+    }
+    this.cinematicTime += dt;
+    const x = this.player.position.x;
+    const z = this.player.position.z;
+    const baseY = heightAt(x, z);
+    const angle = this.player.yaw + Math.PI + this.cinematicTime * 0.06;
+    const radius = 7.5;
+    const cameraX = x + Math.sin(angle) * radius;
+    const cameraZ = z + Math.cos(angle) * radius;
+    this.camera.position.set(cameraX, Math.max(baseY + 2.6, heightAt(cameraX, cameraZ) + 1.6), cameraZ);
+    this.camera.setTarget(new Vector3(x, baseY + 1.35, z));
+  }
+
   private refreshCampaignHud(): void {
     const mood = moodOf(this.campaign.mood);
     const difficulty = difficultyOf(this.campaign.difficulty);
@@ -622,7 +967,32 @@ export class Game {
       }
       return;
     }
+    if (this.dialogueSession) {
+      if (code === "KeyE" || code === "Space" || code === "Enter") {
+        this.advanceDialogue();
+      } else if (this.dialogueSession.phase === "choices" && code.startsWith("Digit")) {
+        const index = Number(code.slice(5)) - 1;
+        if (index >= 0) {
+          this.chooseDialogue(index);
+        }
+      } else if (code === "Escape") {
+        this.closeDialogue();
+      }
+      return;
+    }
+    if (this.cinematicSession) {
+      if (code === "KeyE" || code === "Space" || code === "Enter") {
+        this.advanceCinematic();
+      } else if (code === "Escape" && this.cinematicSession.skippable) {
+        this.endCinematic(true);
+      }
+      return;
+    }
     if (!this.started) {
+      return;
+    }
+    if (code === "KeyV" && !this.mapOpen && !this.boardOpen && !this.paused) {
+      this.toggleCamera();
       return;
     }
     if (code === "KeyJ") {
@@ -687,6 +1057,7 @@ export class Game {
   private update(dt: number): void {
     this.hour = (this.hour + (dt * MINUTES_PER_SECOND) / 60) % 24;
     this.world.update(dt);
+    this.updateActors(dt);
 
     if (this.activeVehicle) {
       const vehicle = this.activeVehicle;
@@ -698,20 +1069,32 @@ export class Game {
       }
     } else {
       this.player.update(dt, this.input, this.world.colliders);
-      this.player.applyCamera(this.camera, dt);
+      this.player.applyCamera(this.camera, dt, this.thirdPerson);
       this.hud.setSpeed(null);
       const point = this.player.position;
       const missionPrompt = this.missions.promptAt(point.x, point.z);
       if (missionPrompt) {
         if (missionPrompt.kind === "interact" && this.input.consumePress("KeyE")) {
-          this.missions.interact(point.x, point.z);
+          this.handleInteract();
         }
       } else {
-        const nearest = this.vehicles.nearest(point, 7);
-        if (nearest && this.input.consumePress("KeyE")) {
-          this.enterVehicle(nearest);
+        const npc = this.characters.nearest(point.x, point.z, 3.6);
+        const alien = this.aliens.nearest(point.x, point.z, 4.2);
+        if (this.input.consumePress("KeyE")) {
+          if (npc || alien) {
+            this.handleInteract();
+          } else {
+            const nearest = this.vehicles.nearest(point, 7);
+            if (nearest) {
+              this.enterVehicle(nearest);
+            }
+          }
         }
       }
+    }
+
+    if (this.dialogueSession || this.cinematicSession) {
+      return;
     }
 
     const point = this.currentPoint();
@@ -734,8 +1117,16 @@ export class Game {
             : prompt.label,
         );
       } else {
-        const nearest = this.vehicles.nearest(this.player.position, 7);
-        this.hud.showPrompt(nearest ? `Drive ${nearest.name}` : null);
+        const npc = this.characters.nearest(point.x, point.z, 3.6);
+        const alien = this.aliens.nearest(point.x, point.z, 4.2);
+        if (npc) {
+          this.hud.showPrompt(`Talk to ${npc.def.name}`);
+        } else if (alien) {
+          this.hud.showPrompt(`Speak with ${alien.name}`);
+        } else {
+          const nearest = this.vehicles.nearest(this.player.position, 7);
+          this.hud.showPrompt(nearest ? `Drive ${nearest.name}` : null);
+        }
       }
     }
 
@@ -780,7 +1171,8 @@ export class Game {
     const point = vehicle.exitPoint();
     this.player.placeAt(point.x, point.z);
     this.player.yaw = point.yaw;
-    this.player.applyCamera(this.camera, 0.016);
+    this.player.applyCamera(this.camera, 0.016, this.thirdPerson);
+    this.amani.root.setEnabled(this.thirdPerson);
     this.hud.setSpeed(null);
     this.hud.showPrompt(null);
     if (!this.missions.activeMission) {
@@ -985,6 +1377,12 @@ export class Game {
           objectiveIndex: this.missions.activeObjectiveIndex,
           missionTimer: this.missions.timer,
           savePresent: readSave() !== null,
+          flags: { ...this.campaign.flags },
+          cameraMode: this.thirdPerson ? "third" : "first",
+          thirdPersonBody: this.amani.root.isEnabled(),
+          dialogueOpen: this.dialogueSession !== null,
+          cinematicOpen: this.cinematicSession !== null,
+          frames: this.frameCount,
         };
       },
       teleport: (x, z) => {
@@ -995,7 +1393,7 @@ export class Game {
           this.activeVehicle.applyChaseCamera(this.camera, 0, true);
         } else {
           this.player.placeAt(x, z);
-          this.player.applyCamera(this.camera, 0.016);
+          this.player.applyCamera(this.camera, 0.016, this.thirdPerson);
         }
       },
       setWaypoint: (x, z, label = "Test waypoint") => {
@@ -1031,6 +1429,7 @@ export class Game {
         trust: this.campaign.trust,
         completed: { ...this.campaign.completed },
         failed: { ...this.campaign.failed },
+        flags: { ...this.campaign.flags },
         briefingSeen: this.campaign.briefingSeen,
         activeMission: this.missions.activeMission?.id ?? null,
       }),
@@ -1094,6 +1493,89 @@ export class Game {
       },
       openBoard: () => this.openBoard(),
       closeBoard: () => this.closeBoard(),
+      cameraMode: () => (this.thirdPerson ? "third" : "first"),
+      setCameraMode: (mode) => {
+        this.thirdPerson = mode !== "first";
+        this.amani.root.setEnabled(this.thirdPerson && this.activeVehicle === null);
+        if (this.activeVehicle) {
+          this.activeVehicle.applyChaseCamera(this.camera, 0, true);
+        } else {
+          this.player.applyCamera(this.camera, 0.016, this.thirdPerson);
+        }
+      },
+      characters: () =>
+        this.characters.placed.map((entry) => ({
+          id: entry.def.id,
+          name: entry.def.name,
+          role: entry.def.role,
+          x: entry.def.x,
+          z: entry.def.z,
+          labelVisible: entry.rig.label?.isEnabled() ?? false,
+        })),
+      robots: () =>
+        this.robots.placed.map((robot) => ({
+          id: robot.def.id,
+          name: robot.def.name,
+          kind: robot.def.kind,
+          x: robot.x,
+          z: robot.z,
+          state: robot.state,
+          detect: robot.def.detect,
+          hover: robot.def.hover ?? 0,
+        })),
+      aliens: () => ({
+        iri: { ...this.aliens.iri },
+        crash: { ...CRASH_SITE },
+      }),
+      flags: () => ({ ...this.campaign.flags }),
+      setFlag: (name, value) => {
+        if (value) {
+          this.campaign.flags[name] = true;
+        } else {
+          delete this.campaign.flags[name];
+        }
+      },
+      openDialogue: (id) => {
+        if (!DIALOGUES[id]) {
+          return false;
+        }
+        this.openDialogue(id);
+        return true;
+      },
+      dialogue: () => {
+        const session = this.dialogueSession;
+        if (!session) {
+          return null;
+        }
+        return {
+          speaker: session.def.speaker,
+          phase: session.phase,
+          nodeIndex: session.nodeIndex,
+          nodeCount: session.def.nodes.length,
+          text: session.def.nodes[Math.min(session.nodeIndex, session.def.nodes.length - 1)],
+          choices:
+            session.phase === "choices"
+              ? this.availableChoices(session.def).map((choice) => choice.label)
+              : [],
+        };
+      },
+      dialogueAdvance: () => this.advanceDialogue(),
+      dialogueChoose: (index) => this.chooseDialogue(index),
+      cinematic: () => {
+        const session = this.cinematicSession;
+        if (!session) {
+          return null;
+        }
+        const line = session.lines[Math.min(session.index, session.lines.length - 1)];
+        return {
+          index: session.index,
+          total: session.lines.length,
+          speaker: line.speaker,
+          text: line.text,
+        };
+      },
+      skipCinematic: () => this.endCinematic(true),
+      playIntro: () => this.playIntro(),
     };
     (window as unknown as { __farmbot: TestApi }).__farmbot = api;
     (window as unknown as { __farmbotScene: Scene }).__farmbotScene = this.scene;

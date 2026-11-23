@@ -7,11 +7,16 @@ built for **Hack Club Harvest 2026** under the theme **BOUNCE BACK!**
 
 ## Status
 
-Open-world prototype with a playable campaign slice. Implemented:
+Open-world prototype with a playable campaign slice and a story chain.
+Implemented:
 
-- A 1.2 km x 1.2 km procedural Kijani Basin with nine named locations,
+- A 1.2 km x 1.2 km procedural Kijani Basin with eleven named locations,
   roads, a lake, hills, vegetation and a shared heightfield.
-- First-person walking, sprinting, jumping and collision.
+- Third-person Amani with a V key first-person toggle; walking, sprinting,
+  jumping, collision and a procedural walk/run/idle pose driver.
+- A cast of five story characters (Mama Zuri, Juma, Wanjiku, Dr. Sifa and
+  the TerraNova Director) built from primitives, with nameplates, idle
+  breathing and facing behaviour.
 - A drivable Kijani Tractor and Riftway Pickup with chase cameras and
   arcade terrain physics.
 - Circular minimap, full-screen survey map with click-to-set waypoints,
@@ -23,13 +28,27 @@ Open-world prototype with a playable campaign slice. Implemented:
 - A mission board (J) with mood-filtered contracts, prerequisites, locked
   and replay states, working objectives (travel, talk/interact, hold E,
   cargo delivery by vehicle), countdowns, credits and community trust.
+- Branching dialogue with five characters: multi-line conversations,
+  number-key/click choices, trust and credit effects, story flags and
+  mission offers gated by mood and prerequisites.
+- Veyari visitors: a crashed ship scar in the eastern dunes, the envoy Iri
+  and a first-contact conversation with an alliance choice.
+- Six Corrupted machine patrols (security, harvester, scout, heavy and
+  hover variants) with waypoint patrols, detection range, an alert state
+  that turns and pulses red, and a return to patrol when the player leaves.
+- A story chain: prologue, tractor, water, descent to the core tap, the
+  crash site, Iri's envoy mission and the machine census, plus an
+  optional intro chapter card and two skippable cinematics.
+- Story flags persist with the save (`crash-seen`, `iri-alliance`,
+  `root-hint`, `intro-seen` and others) and unlock extra dialogue.
 - Autosave and continue via versioned localStorage saves; start, pause,
   discovery and toast UI.
 
-Not implemented yet: scripted dialogue and cutscenes, NPC schedules,
-inventory and equipment, world events/weather, farming and restoration
-actions, audio, settings and journal. The game currently uses procedural
-placeholder geometry only.
+Not implemented yet: audio, NPC schedules beyond idle facing, inventory
+and equipment, weather, farming and restoration actions, multiple mission
+approaches (stealth, negotiation, sabotage), map filters, settings and
+journal. Characters, aliens and robots are procedural placeholders, not
+photoreal models.
 
 ## Technology
 
@@ -85,7 +104,9 @@ npm run preview
 | Mouse | Look (after clicking ENGAGE) |
 | Shift | Sprint |
 | Space | Jump (on foot) / handbrake (vehicle) |
-| E | Enter or exit a nearby vehicle / interact with characters and props |
+| E | Enter or exit a nearby vehicle, talk to characters, interact |
+| 1-3 | Pick a dialogue choice |
+| V | Toggle first-person and third-person camera |
 | J | Open or close the mission board |
 | M | Open or close the world map |
 | T | Advance time by two hours |
